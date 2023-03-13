@@ -1,158 +1,110 @@
-# import transformers
-# from pytorch_pretrained_bert.modeling import BertForSequenceClassification
-# from pytorch_pretrained_bert.tokenization import BertTokenizer
-
-# tokenizer = transformers.BertTokenizer.from_pretrained('bert-base-uncased')
-# # 
-# import transformers
-# import torch
-# import torch.nn as nn
-# from transformers import BertForSequenceClassification
-# from torch.utils.data import DataLoader, Dataset
-
-# tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-uncased")
-
-# class BertClassifier(nn.Module):
-#     def __init__(self, n_classes):
-#         super(BertClassifier, self).__init__()
-#         self.bert = transformers.BertForSequenceClassification.from_pretrained('bert-base-uncased')
-#         self.fc = nn.Linear(self.bert.config.hidden_size, n_classes)
-    
-#     def forward(self, input_ids, attention_mask, token_type_ids):
-#         outputs = self.bert(
-#             input_ids=input_ids,
-#             attention_mask=attention_mask,
-#             token_type_ids=token_type_ids
-#         )
-#         logits = self.fc(outputs[1])
-#         return logits
-    
-# def preprocess(text_a, text_b, max_len):
-#     inputs = tokenizer.encode_plus(
-#         text_a,
-#         text_b,
-#         add_special_tokens=True,
-#         max_length=max_len,
-#         truncation_strategy='longest_first'
-#     )
-#     return torch.tensor(inputs['input_ids']), torch.tensor(inputs['attention_mask']), torch.tensor(inputs['token_type_ids'])
-
-# import torch.optim as optim
-# import torch.nn.functional as F
-
-# def train(model, train_loader, optimizer, criterion, device):
-#     model.train()
-#     for batch_idx, (data_a, data_b, target) in enumerate(train_loader):
-#         data_a, data_b, target = data_a.to(device), data_b.to(device), target.to(device)
-#         optimizer.zero_grad()
-#         output = model(data_a, data_b)
-#         loss = criterion(output, target)
-#         loss.backward()
-#         optimizer.step()
-
-# def evaluate(model, test_loader, criterion, device):
-#     model.eval()
-#     test_loss = 0
-#     correct = 0
-#     with torch.no_grad():
-#         for data_a, data_b, target in test_loader:
-#             data_a, data_b, target = data_a.to(device), data_b.to(device), target.to(device)
-#             output = model(data_a, data_b)
-#             test_loss += criterion(output, target).item()
-#             pred = output.argmax(dim=1, keepdim=True)
-#             correct += pred.eq(target.view_as(pred)).sum().item()
-#     test_loss /= len(test_loader.dataset)
-#     accuracy = 100. * correct / len(test_loader.dataset)
-#     return test_loss, accuracy
 import transformers
 import torch
-import torch.nn as nn
-from transformers import BertForSequenceClassification
-from torch.utils.data import DataLoader, Dataset
-import torch.optim as optim
-import torch.nn.functional as F
+import json
+from transformers import BertForSequenceClassification, BertTokenizer
+from torch.utils.data import TensorDataset, DataLoader
 
-tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-uncased")
+from sklearn import metrics
 
-class BertDataset(Dataset):
-    def __init__(self, data, max_len):
-        self.data = data
-        self.max_len = max_len
-    
-    def __len__(self):
-        return len(self.data)
-    
-    def __getitem__(self, index):
-        text_a, text_b, label = self.data[index]
-        inputs = tokenizer.encode_plus(
-            text_a,
-            text_b,
-            add_special_tokens=True,
-            max_length=self.max_len,
-            truncation_strategy='longest_first'
-        )
-        input_ids = torch.tensor(inputs['input_ids'])
-        attention_mask = torch.tensor(inputs['attention_mask'])
-        token_type_ids = torch.tensor(inputs['token_type_ids'])
-        label = torch.tensor(label)
-        return input_ids, attention_mask, token_type_ids, label
+tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=2)
+def preprocess(text_a, text_b, label, max_len=512):
+    inputs = tokenizer.encode_plus(
+        text_a,
+        text_b,
+        add_special_tokens=True,
+        max_length=max_len,
+        pad_to_max_length=True,
+        return_token_type_ids=True,
+        return_attention_mask=True
+    )
+    return {
+        'input_ids': inputs['input_ids'],
+        'attention_mask': inputs['attention_mask'],
+        'token_type_ids': inputs['token_type_ids'],
+        'label': label
+    }
 
-class BertClassifier(nn.Module):
-    def __init__(self, n_classes):
-        super(BertClassifier, self).__init__()
-        self.bert = transformers.BertForSequenceClassification.from_pretrained('bert-base-uncased')
-        self.fc = nn.Linear(self.bert.config.hidden_size, n_classes)
-    
-    def forward(self, input_ids, attention_mask, token_type_ids):
-        outputs = self.bert(
-            input_ids=input_ids,
-            attention_mask=attention_mask,
-            token_type_ids=token_type_ids
-        )
-        logits = self.fc(outputs[1])
-        return logits
-
-def train(model, train_loader, optimizer, criterion, device):
+def train(model, train_dataloader, optimizer, device, epochs):
+    model = model.to(device)
     model.train()
-    for batch_idx, (input_ids, attention_mask, token_type_ids, target) in enumerate(train_loader):
-        input_ids, attention_mask, token_type_ids, target = input_ids.to(device), attention_mask.to(device), token_type_ids.to(device), target.to(device)
-        optimizer.zero_grad()
-        output = model(input_ids, attention_mask, token_type_ids)
-        loss = criterion(output, target)
-        loss.backward()
-        optimizer.step()
+    for epoch in range(epochs):
+        print(f'Epoch {epoch+1}:')
+        total_loss = 0
+        for step, batch in enumerate(train_dataloader):
+            input_ids = batch[0].to(device)
+            attention_mask = batch[1].to(device)
+            token_type_ids = batch[2].to(device)
+            labels = batch[3].to(device)
+            model.zero_grad()
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids, labels=labels)
+            loss = outputs.loss
+            total_loss += loss.item()
+            loss.backward()
+            optimizer.step()
 
-def evaluate(model, test_loader, criterion, device):
+def evaluate(model, test_dataloader, device):
     model.eval()
-    test_loss = 0
-    correct = 0
+    y_true = []
+    y_pred = []
     with torch.no_grad():
-        for input_ids, attention_mask, token_type_ids, target in test_loader:
-            input_ids, attention_mask, token_type_ids, target = input_ids.to(device), attention_mask.to(device), token_type_ids.to(device), target.to(device)
-            output = model(input_ids, attention_mask, token_type_ids)
-            test_loss += criterion(output, target).item()
-            pred = output.argmax(dim=1, keepdim=True)
-            correct += pred.eq(target.view_as(pred)).sum().item()
-    test_loss /= len(test_loader.dataset)
-    accuracy = 100. * correct / len(test_loader.dataset)
-    return test_loss, accuracy
+        for step, batch in enumerate(test_dataloader):
+            input_ids = batch[0].to(device)
+            attention_mask = batch[1].to(device)
+            token_type_ids = batch[2].to(device)
+            labels = batch[3].to(device)
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask, token_type_ids=token_type_ids)
+            logits = outputs.logits
+            logits = torch.argmax(logits, dim=1)
+            y_true.extend(labels.cpu().numpy())
+            y_pred.extend(logits.cpu().numpy())
+    accuracy = metrics.accuracy_score(y_true, y_pred)
+    precision = metrics.precision_score(y_true, y_pred)
+    recall = metrics.recall_score(y_true, y_pred)
+    f1 = metrics.f1_score(y_true, y_pred)
+    print(f'Test set accuracy: {accuracy:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, F1: {f1:.4f}')
 
 def main():
-    train_dataset = CustomDataset(train_data, tokenizer, max_len=128)
-    test_dataset = CustomDataset(test_data, tokenizer, max_len=128)
+    train_data = [("I love ice cream!", "I hate chocolate ice cream!", 0), ("You are so cute!", "You are so boring!", 1)]
+    max_len = 50
+    train_features = [preprocess(text_a, text_b, label, max_len) for text_a, text_b, label in train_data]
+    train_dataset = TensorDataset(
+        torch.tensor([f['input_ids'] for f in train_features]),
+        torch.tensor([f['attention_mask'] for f in train_features]),
+        torch.tensor([f['token_type_ids'] for f in train_features]),
+        torch.tensor([f['label'] for f in train_features])
+    )
+    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
 
-    train_loader = DataLoader(dataset=train_dataset, batch_size=16, shuffle=True)
-    test_loader = DataLoader(dataset=test_dataset, batch_size=16, shuffle=False)
+    optimizer = transformers.AdamW(model.parameters(), lr=2e-5)
 
-    torch.cuda.set_device(0)
-    device = torch.device("cuda:0")
-    model = BertClassifier(n_classes=2).to(device)
-    optimizer = optim.Adam(model.parameters(), lr=2e-5)
-    criterion = F.cross_entropy
-    for epoch in range(10):
-        train(model, train_loader, optimizer, criterion, device)
-        test_loss, accuracy = evaluate(model, test_loader, criterion, device)
-        print(f'{epoch:d}validation loss: {test_loss:.4f}, accuracy: {accuracy:.2f}%')
+    epochs = 2
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    train(model, train_dataloader, optimizer, device, epochs)
 
-if __name__ == "__main__":
+    test_data = [("I hate ice cream!", "I love chocolate ice cream!", 0), ("He is very handsome.", "She is very beautiful.", 1)]
+    test_features = [preprocess(text_a, text_b, label, max_len) for text_a, text_b, label in test_data]
+    test_dataset = TensorDataset(
+        torch.tensor([f['input_ids'] for f in test_features]),
+        torch.tensor([f['attention_mask'] for f in test_features]),
+        torch.tensor([f['token_type_ids'] for f in test_features]),
+        torch.tensor([f['label'] for f in test_features])
+    )
+    test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False)
+    # Testing
+    evaluate(model, test_dataloader, device)
+
+    # Save the model
+    info = {
+        'train_size': len(train_dataset),
+        'test_size': len(test_dataset),
+        'batch_size': 8,
+        'epochs': epochs
+    }
+    model_info_path = 'model_info.json'
+    model_path = 'BertForSequenceClassification.pth'
+    torch.save(model, model_path)
+    with open(model_info_path, 'w', encoding='utf-8') as f:
+        json.dump(info, f)
+if __name__ == '__main__':
     main()
