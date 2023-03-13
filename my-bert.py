@@ -1,13 +1,21 @@
 import transformers
 import torch
 import json
+import os
+import glob
+import re
+
 from transformers import BertForSequenceClassification, BertTokenizer
 from torch.utils.data import TensorDataset, DataLoader
-
 from sklearn import metrics
 
+
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=2)
+data_dir = './RACE-SR'
+dev_dir = os.path.join(data_dir, 'dev')
+test_dir = os.path.join(data_dir, 'test')
+train_dir = os.path.join(data_dir, 'train')
+
 def preprocess(text_a, text_b, label, max_len=512):
     inputs = tokenizer.encode_plus(
         text_a,
@@ -29,9 +37,11 @@ def train(model, train_dataloader, optimizer, device, epochs):
     model = model.to(device)
     model.train()
     for epoch in range(epochs):
-        print(f'Epoch {epoch+1}:')
+        print(f'************** Epoch {epoch+1}:')
         total_loss = 0
         for step, batch in enumerate(train_dataloader):
+            if step % 10 == 0:
+                print("running step %d" % step)
             input_ids = batch[0].to(device)
             attention_mask = batch[1].to(device)
             token_type_ids = batch[2].to(device)
@@ -64,9 +74,44 @@ def evaluate(model, test_dataloader, device):
     f1 = metrics.f1_score(y_true, y_pred)
     print(f'Test set accuracy: {accuracy:.4f}, precision: {precision:.4f}, recall: {recall:.4f}, F1: {f1:.4f}')
 
+def read_data_from_path(path):
+    dirs = glob.glob(path+"/C*")
+    data = {}
+    for d in dirs:
+        print("*** Scanning dir %s ***" % d)
+        match = re.search(r'C(\d+)', d)
+        label = int(match.group(1))
+        data[label] = []
+        filenames = glob.glob(d + '/*')
+        for filename in filenames:
+            print("Open file %s" % filename)
+            with open(filename, 'r', encoding='utf-8') as fpr:
+                pid = int(match.group(1))
+                data_raw = json.load(fpr)
+                data[label].append([data_raw['s1'], data_raw['s2']])
+    return data
+
 def main():
-    train_data = [("I love ice cream!", "I hate chocolate ice cream!", 0), ("You are so cute!", "You are so boring!", 1)]
-    max_len = 50
+    # self defined parameters
+    max_len = 256
+    batch_size = 128
+    lr = 2e-5
+    epochs = 2
+    device_name = "cuda:0"
+    num_labels = 6
+
+    train_data_dict = read_data_from_path(dev_dir)
+    test_data_dict = read_data_from_path(test_dir)
+    train_data = []
+    test_data = []
+    for k, v in train_data_dict.items():
+        for [s1, s2] in v:
+            train_data.append((s1, s2, k-1))
+    
+    for k, v in test_data_dict.items():
+        for [s1, s2] in v:
+            test_data.append((s1, s2, k-1))
+
     train_features = [preprocess(text_a, text_b, label, max_len) for text_a, text_b, label in train_data]
     train_dataset = TensorDataset(
         torch.tensor([f['input_ids'] for f in train_features]),
@@ -74,15 +119,8 @@ def main():
         torch.tensor([f['token_type_ids'] for f in train_features]),
         torch.tensor([f['label'] for f in train_features])
     )
-    train_dataloader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
 
-    optimizer = transformers.AdamW(model.parameters(), lr=2e-5)
-
-    epochs = 2
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    train(model, train_dataloader, optimizer, device, epochs)
-
-    test_data = [("I hate ice cream!", "I love chocolate ice cream!", 0), ("He is very handsome.", "She is very beautiful.", 1)]
     test_features = [preprocess(text_a, text_b, label, max_len) for text_a, text_b, label in test_data]
     test_dataset = TensorDataset(
         torch.tensor([f['input_ids'] for f in test_features]),
@@ -91,7 +129,15 @@ def main():
         torch.tensor([f['label'] for f in test_features])
     )
     test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False)
+
+    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=num_labels)
+    optimizer = transformers.AdamW(model.parameters(), lr=lr)
+
+    device = torch.device(device_name)
+    print("*************** Start Trainning *************")
+    train(model, train_dataloader, optimizer, device, epochs)
     # Testing
+    print("*************** Start Testing *************")
     evaluate(model, test_dataloader, device)
 
     # Save the model
@@ -101,8 +147,8 @@ def main():
         'batch_size': 8,
         'epochs': epochs
     }
-    model_info_path = 'model_info.json'
-    model_path = 'BertForSequenceClassification.pth'
+    model_info_path = 'wq_model_info.json'
+    model_path = 'WQBertForSequenceClassification.pth'
     torch.save(model, model_path)
     with open(model_info_path, 'w', encoding='utf-8') as f:
         json.dump(info, f)
