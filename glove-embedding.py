@@ -14,7 +14,12 @@ data_dir = "./RACE"
 train_dir = os.path.join(data_dir, 'train')
 dev_dir = os.path.join(data_dir, 'dev')
 test_dir = os.path.join(data_dir, 'test')
-new_dir = "./NEW-RACE-TEST"
+
+new_dir = "./NEW-RACE"
+new_dev_dir = os.path.join(new_dir, 'dev')
+new_train_dir = os.path.join(new_dir, 'train')
+new_test_dir = os.path.join(new_dir, 'test')
+
 def tokenize(text):
     tokens = nlp(text)
     ret = []

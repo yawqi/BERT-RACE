@@ -10,8 +10,8 @@ from torch.utils.data import TensorDataset, DataLoader
 from sklearn import metrics
 from sklearn.metrics import confusion_matrix, classification_report
 
-
-tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+pretrain_model = 'bert-base-uncased'
+tokenizer = BertTokenizer.from_pretrained(pretrain_model)
 data_dir = './RACE-SR'
 dev_dir = os.path.join(data_dir, 'dev')
 test_dir = os.path.join(data_dir, 'test')
@@ -79,6 +79,8 @@ def evaluate(model, test_dataloader, device):
     y_pred = []
     with torch.no_grad():
         for step, batch in enumerate(test_dataloader):
+            if step % 10 == 0:
+                print("running step %d" % step)
             input_ids = batch[0].to(device)
             attention_mask = batch[1].to(device)
             token_type_ids = batch[2].to(device)
@@ -114,14 +116,22 @@ def read_data_from_path(path):
 
 def main():
     # self defined parameters
-    max_len = 256
-    batch_size = 96
+    max_len = 128
+    batch_size = 256
     lr = 2e-5
-    epochs = 5
+    epochs = 3
     device_name = "cuda:1"
     num_labels = 6
+    curr_train_dir = train_dir
+    base_dir = os.path.basename(curr_train_dir)
+    model_info_path = f'2-{pretrain_model}-{base_dir}-e{epochs}-b{batch_size}-l{max_len}-model-info.json'
+    model_path = f'2-{pretrain_model}-{base_dir}-e{epochs}-b{batch_size}-l{max_len}.pth'
 
-    train_data_dict = read_data_from_path(dev_dir)
+    if os.path.isfile(model_path):
+        print("model already exists")
+        return
+
+    train_data_dict = read_data_from_path(curr_train_dir)
     test_data_dict = read_data_from_path(test_dir)
     train_data = []
     test_data = []
@@ -168,7 +178,7 @@ def main():
     )
     test_dataloader = DataLoader(test_dataset, batch_size=8, shuffle=False)
 
-    model = BertForSequenceClassification.from_pretrained('bert-base-uncased', num_labels=num_labels)
+    model = BertForSequenceClassification.from_pretrained(pretrain_model, num_labels=num_labels)
     optimizer = transformers.AdamW(model.parameters(), lr=lr)
 
     device = torch.device(device_name)
@@ -185,8 +195,7 @@ def main():
         'batch_size': 8,
         'epochs': epochs
     }
-    model_info_path = 'wq_model_info.json'
-    model_path = 'base-dev-5-256-96.pth'
+
     torch.save(model, model_path)
     with open(model_info_path, 'w', encoding='utf-8') as f:
         json.dump(info, f)

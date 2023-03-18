@@ -1,18 +1,16 @@
 import transformers
 import torch
 import torch.nn as nn
-from transformers import BertForSequenceClassification
+from transformers import BertForSequenceClassification, InputExample, InputFeatures
 from torch.utils.data import DataLoader
-from transformers import InputExample, InputFeatures
-# from transformers import datasets
 
-# train_dataset = datasets.load_dataset("imdb", split="train")
+
 tokenizer = transformers.BertTokenizer.from_pretrained("bert-base-uncased")
 
 class BertClassifier(nn.Module):
     def __init__(self, n_classes):
         super(BertClassifier, self).__init__()
-        self.bert = transformers.BertForSequenceClassification.from_pretrained(
+        self.bert = BertForSequenceClassification.from_pretrained(
             "bert-base-uncased"
         )
         self.fc = nn.Linear(self.bert.config.hidden_size, n_classes)
@@ -48,7 +46,7 @@ def train(model, train_loader, optimizer, criterion, device):
     for batch_idx, (data_a, data_b, target) in enumerate(train_loader):
         data_a, data_b, target = data_a.to(device), data_b.to(device), target.to(device)
         optimizer.zero_grad()
-        output = model(data_a, data_b)
+        output = model(data_a, data_b, None)
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
@@ -64,7 +62,7 @@ def evaluate(model, test_loader, criterion, device):
                 data_b.to(device),
                 target.to(device),
             )
-            output = model(data_a, data_b)
+            output = model(data_a, data_b, None)
             test_loss += criterion(output, target).item()
             pred = output.argmax(dim=1, keepdim=True)
             correct += pred.eq(target.view_as(pred)).sum().item()
@@ -74,38 +72,41 @@ def evaluate(model, test_loader, criterion, device):
 
 
 def main():
-    train_data = [("sentence1", "sentence2", 1), ("sentence1", "sentence2", 0), ...]
-    test_data = [("sentence1", "sentence2", 1), ("sentence1", "sentence2", 0), ...]
-    train_loader = DataLoader(
-        dataset=train_data,
-        batch_size=16,
-        shuffle=True,
-        collate_fn=lambda x: (
-            torch.stack([i[0] for i in x], dim=0),
-            torch.stack([i[1] for i in x], dim=0),
-            torch.tensor([i[2] for i in x]),
-        ),
+    # 定义训练集
+    train_data = [("sentence1", "sentence2", 1), ("sentence3", "sentence4", 0)]
+    train_examples = [InputExample(guid=None, text_a=t[0], text_b=t[1], label=t[2]) for t in train_data]
+    train_features = [InputFeatures.from_examples(ex, max_length=128) for ex in train_examples]
+    train_tensor_dataset = torch.utils.data.TensorDataset(
+        torch.tensor([f.input_ids for f in train_features]),
+        torch.tensor([f.attention_mask for f in train_features]),
+        torch.tensor([f.token_type_ids for f in train_features]),
+        torch.tensor([f.label for f in train_features]),
     )
-    test_loader = DataLoader(
-        dataset=test_data,
-        batch_size=16,
-        shuffle=False,
-        collate_fn=lambda x: (
-            torch.stack([i[0] for i in x], dim=0),
-            torch.stack([i[1] for i in x], dim=0),
-            torch.tensor([i[2] for i in x]),
-        ),
-    )
+    train_loader = DataLoader(dataset=train_tensor_dataset, batch_size=1, shuffle=True)
 
-    torch.cuda.set_device(0)
-    device = torch.device("cuda:1")
+    # 定义测试集
+    test_data = [("sentence5", "sentence6", 1), ("sentence7", "sentence8", 0)]
+    test_examples = [InputExample(guid=None, text_a=t[0], text_b=t[1], label=t[2]) for t in test_data]
+    test_features = [InputFeatures.from_examples(ex, max_length=128) for ex in test_examples]
+    test_tensor_dataset = torch.utils.data.TensorDataset(
+        torch.tensor([f.input_ids for f in test_features]),
+        torch.tensor([f.attention_mask for f in test_features]),
+        torch.tensor([f.token_type_ids for f in test_features]),
+        torch.tensor([f.label for f in test_features]),
+    )
+    test_loader = DataLoader(dataset=test_tensor_dataset, batch_size=1, shuffle=False)
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print("Using device:", device)
+
     model = BertClassifier(n_classes=2).to(device)
     optimizer = optim.Adam(model.parameters(), lr=2e-5)
-    criterion = F.cross_entropy
-    for epoch in range(10):
+    criterion = nn.CrossEntropyLoss()
+    num_epochs = 10
+    for epoch in range(num_epochs):
         train(model, train_loader, optimizer, criterion, device)
         test_loss, accuracy = evaluate(model, test_loader, criterion, device)
-        print(f"{epoch:d}validation loss: {test_loss:.4f}, accuracy: {accuracy:.2f}%")
+        print(f"Epoch {epoch}: validation loss: {test_loss:.4f}, accuracy: {accuracy:.2f}%")
 
 if __name__ == "__main__":
     main()
