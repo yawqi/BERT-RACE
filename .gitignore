@@ -1,1 +1,9 @@
 *RACE*
+*.pth
+*model-info.json
+output*
+base_models
+large_models
+__pycache__
+.vector_cache
+*.json

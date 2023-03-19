@@ -8,25 +8,29 @@ data_dir = './NEW-RACE'
 train_data_dir = data_dir + '-TRAIN'
 test_data_dir = data_dir + '-TEST'
 dev_data_dir = data_dir + '-DEV'
-race_sr_dir = './RACE-SR'
+race_sr_dir = './RACE-SR-NEW'
 test_dir = os.path.join(race_sr_dir, 'test')
 dev_dir = os.path.join(race_sr_dir, 'dev')
 train_dir = os.path.join(race_sr_dir, 'train')
-cur_dir = train_dir
-c1_dir = os.path.join(cur_dir, "C1")
-c2_dir = os.path.join(cur_dir, "C2")
-c3_dir = os.path.join(cur_dir, "C3")
-c4_dir = os.path.join(cur_dir, "C4")
-c5_dir = os.path.join(cur_dir, "C5")
-c6_dir = os.path.join(cur_dir, "C6")
+
+input_dir = train_data_dir
+output_dir = train_dir
+
+c1_dir = os.path.join(output_dir, "C1")
+c2_dir = os.path.join(output_dir, "C2")
+c3_dir = os.path.join(output_dir, "C3")
+c4_dir = os.path.join(output_dir, "C4")
+c5_dir = os.path.join(output_dir, "C5")
+# c6_dir = os.path.join(cur_dir, "C6")
 c1 = []
 c2 = []
 c3 = []
 c4 = []
 c5 = []
-c6 = []
-pqa_or_pqd = 0
-c6_opt = 0
+# c6 = []
+# pqa_or_pqd = 0
+c4_opt = 0
+c5_opt = 0
 
 def generate_data(pid1, pid2, qid1, qid2, all_pqs, all_as, all_ds):
     if len(all_ds[pid2][qid2]) == 0:
@@ -35,30 +39,31 @@ def generate_data(pid1, pid2, qid1, qid2, all_pqs, all_as, all_ds):
     pq = all_pqs[pid1][qid1]
     a = all_as[pid2][qid2]
     d = all_ds[pid2][qid2][d_idx]
-    global pqa_or_pqd, c6_opt
+    global c4_opt, c5_opt
     if pid1 == pid2:
         if qid1 == qid2:
             # 同一P、Q
-            c1.append([pq, a])
-            c2.append([pq, d])
-            c3.append([a, d])
+            c1.append([pq, a, '0'])
+            c2.append([pq, d, '0'])
+            c3.append([a, d, '0'])
         else:
             # 同一P、不同Q
-            if pqa_or_pqd % 2 == 0:
-                c4.append([pq, a])
+            if c4_opt == 0:
+                c4.append([pq, a, '0'])
+            elif c4_opt == 1:
+                c4.append([pq, d, '1'])
             else:
-                c4.append([pq, d])
-            c5.append([a, d])
-            pqa_or_pqd += 1
+                c4.append([a, d, '2'])
+            c4_opt = (c4_opt + 1) % 3
     else:
         # 不同P、不同Q
-        if c6_opt == 0:
-            c6.append([pq, a])
-        elif c6_opt == 1:
-            c6.append([pq, d])
+        if c5_opt == 0:
+            c5.append([pq, a, '0'])
+        elif c5_opt == 1:
+            c5.append([pq, d, '1'])
         else:
-            c6.append([a, d])
-        c6_opt = (c6_opt + 1) % 3
+            c5.append([a, d, '2'])
+        c5_opt = (c5_opt + 1) % 3
 
 def read_race_examples(paths):
     all_pqs = []
@@ -141,21 +146,24 @@ def read_race_examples(paths):
         #         q2 = random.randint(0, qid)
         #         generate_data(prev_pid - 1, prev_pid, q1, q2)
 def dump_data(cn, path):
-    for i, [s1, s2] in enumerate(cn):
+    if not os.path.exists(path):
+        os.makedirs(path)
+    for i, [s1, s2, type] in enumerate(cn):
         data = {}
         data['s1'] = s1
         data['s2'] = s2
+        data['type'] = int(type)
         filename = os.path.join(path, str(i) + '.txt')
         with open(filename, 'w') as f:
             json.dump(data, f)
     
 def main():
-    read_race_examples([train_data_dir,])
+    read_race_examples([input_dir,])
     dump_data(c1, c1_dir)
     dump_data(c2, c2_dir)
     dump_data(c3, c3_dir)
     dump_data(c4, c4_dir)
     dump_data(c5, c5_dir)
-    dump_data(c6, c6_dir)
+    # dump_data(c6, c6_dir)
 if __name__ == '__main__':
     main()
