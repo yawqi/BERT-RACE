@@ -1,183 +1,100 @@
-import re
-import os
-import random
-import torch
-import numpy as np
-import scipy
-from tqdm import tqdm
-from config import set_args
-from model import Model
 from torch.utils.data import DataLoader
-from transformers.models.bert import BertTokenizer
-from transformers import AdamW, get_linear_schedule_with_warmup
-from data_helper import CustomDataset, collate_fn, pad_to_maxlen, load_data, load_test_data
+import math
+from sentence_transformers import SentenceTransformer,  LoggingHandler, losses, models, util
+from sentence_transformers.evaluation import LabelAccuracyEvaluator
+from sentence_transformers.readers import InputExample
+import logging
+from datetime import datetime
+import sys
+import os
+import glob
+import re
+import json
 
-def l2_normalize(vecs):
-    """标准化
-    """
-    norms = (vecs**2).sum(axis=1, keepdims=True)**0.5
-    return vecs / np.clip(norms, 1e-8, np.inf)
+#### Just some code to print debug information to stdout
+logging.basicConfig(format='%(asctime)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO,
+                    handlers=[LoggingHandler()])
+#### /print debug information to stdout
 
-def compute_corrcoef(x, y):
-    """Spearman相关系数
-    """
-    return scipy.stats.spearmanr(x, y).correlation
+def read_data_from_path(path, max_label = None):
+    dirs = glob.glob(path+"/C*")
+    examples = []
+    for d in dirs:
+        print("*** Scanning dir %s ***" % d)
+        match = re.search(r'C(\d+)', d)
+        label = int(match.group(1)) - 1
+        if max_label and max_label - 1 < label:
+            continue
+        label = max_label - 1 - label
+        filenames = glob.glob(d + '/*')
+        for filename in filenames:
+            print("Open file %s" % filename)
+            with open(filename, 'r', encoding='utf-8') as fpr:
+                # pid = int(match.group(1))
+                data_raw = json.load(fpr)
+                examples.append(InputExample(texts=[data_raw['s1'], data_raw['s2']], label=label))
+    return examples
 
-def compute_pearsonr(x, y):
-    return scipy.stats.perasonr(x, y)[0]
+#You can specify any huggingface/transformers pre-trained model here, for example, bert-base-uncased, roberta-base, xlm-roberta-base
+model_name = sys.argv[1] if len(sys.argv) > 1 else 'bert-base-uncased'
+# Read the dataset
+train_batch_size = 32
+num_epochs = 3
 
-def set_seed():
-    random.seed(args.seed)
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(args.seed)
+task_2_data_dir = './TASK-2-DATA'
+curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
+# task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
+# task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
-def get_sent_id_tensor(s_list):
-    input_ids, attention_mask, token_type_ids, labels = [], [], [], []
-    max_len = min(max([len(_)+2 for _ in s_list]), 512)   # 这样写不太合适 后期想办法改一下
-    for s in s_list:
-        inputs = tokenizer.encode_plus(text=s, text_pair=None, add_special_tokens=True, return_token_type_ids=True)
-        input_ids.append(pad_to_maxlen(inputs['input_ids'], max_len=max_len))
-        attention_mask.append(pad_to_maxlen(inputs['attention_mask'], max_len=max_len))
-        token_type_ids.append(pad_to_maxlen(inputs['token_type_ids'], max_len=max_len))
-    all_input_ids = torch.tensor(input_ids, dtype=torch.long)
-    all_input_mask = torch.tensor(attention_mask, dtype=torch.long)
-    all_segment_ids = torch.tensor(token_type_ids, dtype=torch.long)
-    return all_input_ids, all_input_mask, all_segment_ids
+num_labels = 2
+device_name = "cuda:0"
+train_samples = read_data_from_path(os.path.join(task_2_data_dir, 'train'), 2)
+dev_samples = read_data_from_path(os.path.join(task_2_data_dir, 'dev'), 2)
 
-def evaluate(device):
-    sent1, sent2, label = load_test_data(args.test_data, max_label=2)
-    all_a_vecs = []
-    all_b_vecs = []
-    all_labels = []
-    device = torch.device(device)
-    model.to(device)
-    model.eval()
-    for s1, s2, lab in tqdm(zip(sent1, sent2, label)):
-        input_ids, input_mask, segment_ids = get_sent_id_tensor([s1, s2])
-        lab = torch.tensor([lab], dtype=torch.float)
-        input_ids = input_ids.to(device)
-        input_mask = input_mask.to(device)
-        segment_ids = segment_ids.to(device)
-        lab = lab.to(device)
-        # if torch.cuda.is_available():
-        #     input_ids, input_mask, segment_ids = input_ids.cuda(), input_mask.cuda(), segment_ids.cuda()
-        #     lab = lab.cuda()
+# Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
+word_embedding_model = models.Transformer(model_name)
+# Apply mean pooling to get one fixed sized sentence vector
+pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
+                               pooling_mode_mean_tokens=True,
+                               pooling_mode_cls_token=False,
+                               pooling_mode_max_tokens=False)
 
-        with torch.no_grad():
-            output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
-        output = output.to(device)
-        all_a_vecs.append(output[0].cpu().numpy())
-        all_b_vecs.append(output[1].cpu().numpy())
-        all_labels.extend(lab.cpu().numpy())
+model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device_name)
 
-    all_a_vecs = np.array(all_a_vecs)
-    all_b_vecs = np.array(all_b_vecs)
-    all_labels = np.array(all_labels)
+# Convert the dataset to a DataLoader ready for training
+logging.info("Read Task2 train dataset")
 
-    a_vecs = l2_normalize(all_a_vecs)
-    b_vecs = l2_normalize(all_b_vecs)
-    sims = (a_vecs * b_vecs).sum(axis=1)
-    corrcoef = compute_corrcoef(all_labels, sims)
-    return corrcoef
+train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batch_size)
+dev_dataloader = DataLoader(dev_samples, shuffle=True, batch_size=train_batch_size)
 
-def calc_loss(y_true, y_pred, device):
-    # 1. 取出真实的标签
-    y_true = y_true[::2]    # tensor([1, 0, 1]) 真实的标签
+train_loss = losses.SoftmaxLoss(model=model, sentence_embedding_dimension=model.get_sentence_embedding_dimension(), num_labels=num_labels)
 
-    # 2. 对输出的句子向量进行l2归一化   后面只需要对应为相乘  就可以得到cos值了
-    norms = (y_pred ** 2).sum(axis=1, keepdims=True) ** 0.5
-    # y_pred = y_pred / torch.clip(norms, 1e-8, torch.inf)
-    y_pred = y_pred / norms
+logging.info("Read Task-2 dev dataset")
+evaluator = LabelAccuracyEvaluator(dev_dataloader, softmax_model=train_loss, name='task2-dev')
 
-    # 3. 奇偶向量相乘
-    y_pred = torch.sum(y_pred[::2] * y_pred[1::2], dim=1) * 20
+# Configure the training. We skip evaluation in this example
+warmup_steps = math.ceil(len(train_dataloader) * num_epochs  * 0.1) #10% of train data for warm-up
+logging.info("Warmup-steps: {}".format(warmup_steps))
 
-    # 4. 取出负例-正例的差值
-    y_pred = y_pred[:, None] - y_pred[None, :]  # 这里是算出所有位置 两两之间余弦的差值
-    # 矩阵中的第i行j列  表示的是第i个余弦值-第j个余弦值
-    y_true = y_true[:, None] < y_true[None, :]   # 取出负例-正例的差值
-    y_true = y_true.float()
-    y_pred = y_pred - (1 - y_true) * 1e12
-    y_pred = y_pred.view(-1)
-    y_pred = torch.cat((torch.tensor([0]).float().to(device), y_pred), dim=0)  # 这里加0是因为e^0 = 1相当于在log中加了1
-        
-    return torch.logsumexp(y_pred, dim=0)
+# Train the model
+model.fit(train_objectives=[(train_dataloader, train_loss)],
+          evaluator=evaluator,
+          epochs=num_epochs,
+          evaluation_steps=1000,
+          warmup_steps=warmup_steps,
+          output_path=task_2_model_save_path)
 
-if __name__ == '__main__':
-    args = set_args()
-    set_seed()
-    os.makedirs(args.output_dir, exist_ok=True)
+##############################################################################
+#
+# Load the stored model and evaluate its performance on benchmark dataset
+#
+##############################################################################
 
-    tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
-
-    # 加载数据集
-    train_sentence, train_label = load_data(args.train_data, max_label=2)
-
-    train_dataset = CustomDataset(sentence=train_sentence, label=train_label, tokenizer=tokenizer)
-    train_dataloader = DataLoader(dataset=train_dataset, shuffle=False, batch_size=args.train_batch_size,
-                                  collate_fn=collate_fn, num_workers=1)
-
-    total_steps = len(train_dataloader) * args.num_train_epochs
-
-    num_train_optimization_steps = int(
-        len(train_dataset) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
-
-    model = Model(pretrain_model_path_or_name=args.pretrained_model_path)
-    device = torch.device(args.device)
-    model.to(device)
-    # if torch.cuda.is_available():
-    #     model.cuda(1)
-
-    param_optimizer = list(model.named_parameters())
-    no_decay = ['bias', 'LayerNorm.bias', 'LayerNorm.weight']
-    optimizer_grouped_parameters = [
-        {'params': [p for n, p in param_optimizer if not any(nd in n for nd in no_decay)], 'weight_decay': 0.01},
-        {'params': [p for n, p in param_optimizer if any(nd in n for nd in no_decay)], 'weight_decay': 0.0}
-    ]
-
-    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate)
-
-    scheduler = get_linear_schedule_with_warmup(optimizer=optimizer, num_warmup_steps=0.05 * total_steps,
-                                                num_training_steps=total_steps)
-
-    print("***** Running training *****")
-    print("  Num examples = %d" % len(train_dataset))
-    print("  Batch size = %d" % args.train_batch_size)
-    print("  Num steps = %d" % num_train_optimization_steps)
-    for epoch in range(args.num_train_epochs):
-        model.train()
-        train_label, train_predict = [], []
-        epoch_loss = 0
-
-        for step, batch in enumerate(train_dataloader):
-            # for step, batch in enumerate(train_dataloader):
-            input_ids, input_mask, segment_ids, label_ids = batch
-            # if torch.cuda.is_available():
-            input_ids = input_ids.to(device)
-            input_mask = input_mask.to(device)
-            segment_ids = segment_ids.to(device)
-            label_ids = label_ids.to(device)
-            output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
-            loss = calc_loss(label_ids, output, device=args.device)
-            loss.backward()
-            print("当前轮次:{}, 正在迭代:{}/{}, Loss:{:10f}".format(epoch, step, len(train_dataloader), loss))  # 在进度条前面定义一段文字
-            # nn.utils.clip_grad_norm_(model.parameters(), max_norm=20, norm_type=2)
-            epoch_loss += loss
-
-            if (step + 1) % args.gradient_accumulation_steps == 0:
-                optimizer.step()
-                scheduler.step()
-                optimizer.zero_grad()
-
-        corr = evaluate(args.device)
-        s = 'Epoch:{} | corr: {:10f}'.format(epoch, corr)
-        logs_path = os.path.join(args.output_dir, 'logs.txt')
-        with open(logs_path, 'a+') as f:
-            s += '\n'
-            f.write(s)
-
-        model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        output_model_file = os.path.join(args.output_dir, "base_model_epoch_{}.bin".format(epoch))
-        torch.save(model_to_save.state_dict(), output_model_file)
+test_samples = read_data_from_path(os.path.join(task_2_data_dir, 'test'), 2)
+# model = SentenceTransformer(task_2_model_save_path, device=device_name)
+test_dataloader = DataLoader(test_samples, shuffle=True, batch_size=train_batch_size)
+test_evaluator = LabelAccuracyEvaluator(test_dataloader, name='task2-test', softmax_model=train_loss)
+test_evaluator(model, output_path=task_2_model_save_path)

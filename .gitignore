@@ -7,3 +7,4 @@ large_models
 __pycache__
 .vector_cache
 *.json
+*DATA

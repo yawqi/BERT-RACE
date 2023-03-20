@@ -5,9 +5,12 @@ from gensim.scripts.glove2word2vec import glove2word2vec
 import json
 import glob
 import os
-
+import spacy
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
 # 加载预训练的GloVe词向量
 glove_file = '.vector_cache/glove.840B.300d.txt'
+nlp = spacy.load('en_core_web_sm')
 # word2vec_output_file = '.vector_cache/glove.840B.300d.word2vec.txt'
 
 # # 将GloVe文件转换为Word2Vec格式
@@ -28,7 +31,7 @@ def find_similar_words(word, n=3):
     if len(similar_words) == 0:
         print("{} no similar words".format(word))
         return []
-    print("{} : {}".format(word, similar_words))
+    # print("{} : {}".format(word, similar_words))
     return [w[0] for w in similar_words]
 
 # 定义一个函数来替换句子中一半的单词
@@ -38,7 +41,10 @@ def replace_words(sentence):
     replace_indices = random.sample(range(n), max(1, n//2))
     for i in replace_indices:
         word = words[i]
-        similar_words = find_similar_words(word)
+        # 对单词进行词形还原和归一化处理
+        token = nlp(word)[0]
+        lemma = token.lemma_.lower()
+        similar_words = find_similar_words(lemma)
         if similar_words:
             words[i] = random.choice(similar_words)
     return ' '.join(words)
@@ -75,19 +81,45 @@ def dump_data(cn, path, type, idx = 0):
             json.dump(data, f)
     return count
 
-def generate_C2(c1, c4, c5):
+def process_replace_words_type_0(c2_type_0, i):
+    c2_type_0[i][0] = replace_words(c2_type_0[i][0])
+    if i % 100 == 0:
+        print("{} done, {} to do".format(i, len(c2_type_0) - i))
+    return c2_type_0[i]
+
+def process_replace_words_type_2(c2_type_2, i):
+    c2_type_2[i][1] = replace_words(c2_type_2[i][1])
+    if i % 100 == 0:
+        print("{} done, {} to do".format(i, len(c2_type_2) - i))
+    return c2_type_2[i]
+
+
+def generate_C2(c1, c4, c5, num_threads=8):
     type_0_count = len(c1) // 2
     type_1_count = len(c1) // 4
     type_2_count = len(c1) - type_0_count - type_1_count
     c2_type_0 = random.sample(c1, type_0_count)
     c2_type_1 = []
     c2_type_2 = random.sample(c1, type_2_count)
-    for i in range(0, type_0_count):
-        c2_type_0[i][0] = replace_words(c2_type_0[i][0])
+    # for i in range(0, type_0_count):
+    #     if i % 100 == 0:
+    #         print("{} done, {} to do".format(i, type_0_count - i))
+    #     c2_type_0[i][0] = replace_words(c2_type_0[i][0])
+    # c2_type_1.extend(random.sample(c4, type_1_count // 2))
+    # c2_type_1.extend(random.sample(c5, type_1_count - type_1_count // 2))
+    # for i in range(0, type_2_count):
+    #     if i % 100 == 0:
+    #         print("{} done, {} to do".format(i, type_2_count - i))
+    #     c2_type_2[i][1] = replace_words(c2_type_2[i][1])
+    with ThreadPoolExecutor(max_workers=num_threads) as executor:
+        process_replace_words_type_0_partial = partial(process_replace_words_type_0, c2_type_0)
+        c2_type_0 = list(executor.map(process_replace_words_type_0_partial, range(type_0_count)))
+
+        process_replace_words_type_2_partial = partial(process_replace_words_type_2, c2_type_2)
+        c2_type_2 = list(executor.map(process_replace_words_type_2_partial, range(type_2_count)))
+
     c2_type_1.extend(random.sample(c4, type_1_count // 2))
     c2_type_1.extend(random.sample(c5, type_1_count - type_1_count // 2))
-    for i in range(0, type_2_count):
-        c2_type_2[i][1] = replace_words(c2_type_2[i][1])
     return c2_type_0, c2_type_1, c2_type_2
 
 # 示例用法
@@ -101,8 +133,8 @@ test_out_dir = os.path.join(out_dir, 'test/C2')
 dev_out_dir = os.path.join(out_dir, 'dev/C2')
 train_out_dir = os.path.join(out_dir, 'train/C2')
 
-input_dir = dev_dir
-output_dir = dev_out_dir
+input_dir = test_dir
+output_dir = test_out_dir
 
 c1 = read_data_from_path(os.path.join(input_dir, 'C3'), 0)
 c4 = read_data_from_path(os.path.join(input_dir, 'C4'), 2)

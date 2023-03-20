@@ -27,6 +27,7 @@ def read_data_from_path(path, max_label = None):
         label = int(match.group(1)) - 1
         if max_label and max_label - 1 < label:
             continue
+        label = max_label - 1 - label
         filenames = glob.glob(d + '/*')
         for filename in filenames:
             print("Open file %s" % filename)
@@ -40,18 +41,18 @@ def read_data_from_path(path, max_label = None):
 model_name = sys.argv[1] if len(sys.argv) > 1 else 'bert-base-uncased'
 # Read the dataset
 train_batch_size = 16
-num_epochs = 2
+num_epochs = 3
 
-task_1_data_dir = './RACE-SR'
+task_1_data_dir = './RACE-SR-NEW'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
 task_1_model_save_path = 'output-1/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
-task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
-task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
+# task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
+# task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
-num_labels = 6
-train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'))[::4]
+num_labels = 5
+device_name = "cuda:1"
+train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'))
 dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'))
-test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'))
 
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
@@ -92,8 +93,10 @@ model.fit(train_objectives=[(train_dataloader, train_loss)],
 #
 ##############################################################################
 
-model = SentenceTransformer(task_1_model_save_path)
-test_evaluator = LabelAccuracyEvaluator(test_samples, name='task1-test', softmax_model=train_loss)
+test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'))
+model = SentenceTransformer(task_1_model_save_path, device=device_name)
+test_dataloader = DataLoader(test_samples, shuffle=True, batch_size=train_batch_size)
+test_evaluator = LabelAccuracyEvaluator(test_dataloader, name='task1-test', softmax_model=train_loss)
 test_evaluator(model, output_path=task_1_model_save_path)
 
 ##############################################################################
