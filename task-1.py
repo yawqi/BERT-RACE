@@ -18,7 +18,7 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
                     handlers=[LoggingHandler()])
 #### /print debug information to stdout
 
-def read_data_from_path(path, max_label = None):
+def read_data_from_path(path, max_label):
     dirs = glob.glob(path+"/C*")
     examples = []
     for d in dirs:
@@ -40,7 +40,7 @@ def read_data_from_path(path, max_label = None):
 #You can specify any huggingface/transformers pre-trained model here, for example, bert-base-uncased, roberta-base, xlm-roberta-base
 model_name = sys.argv[1] if len(sys.argv) > 1 else 'bert-base-uncased'
 # Read the dataset
-train_batch_size = 16
+train_batch_size = 32
 num_epochs = 3
 
 task_1_data_dir = './RACE-SR-NEW'
@@ -51,8 +51,8 @@ task_1_model_save_path = 'output-1/task-1-'+model_name.replace("/", "-")+'-'+ cu
 
 num_labels = 5
 device_name = "cuda:1"
-train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'))
-dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'))
+train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'), max_label=num_labels)
+dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'), max_label=num_labels)
 
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
@@ -93,8 +93,8 @@ model.fit(train_objectives=[(train_dataloader, train_loss)],
 #
 ##############################################################################
 
-test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'))
-model = SentenceTransformer(task_1_model_save_path, device=device_name)
+test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'), max_label=num_labels)
+# model = SentenceTransformer(task_1_model_save_path, device=device_name)
 test_dataloader = DataLoader(test_samples, shuffle=True, batch_size=train_batch_size)
 test_evaluator = LabelAccuracyEvaluator(test_dataloader, name='task1-test', softmax_model=train_loss)
 test_evaluator(model, output_path=task_1_model_save_path)

@@ -94,7 +94,7 @@ def process_replace_words_type_2(c2_type_2, i):
     return c2_type_2[i]
 
 
-def generate_C2(c1, c4, c5, num_threads=8):
+def generate_C2(c1, c4, c5, num_threads=32):
     type_0_count = len(c1) // 2
     type_1_count = len(c1) // 4
     type_2_count = len(c1) - type_0_count - type_1_count

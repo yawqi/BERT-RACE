@@ -12,6 +12,7 @@ from transformers.models.bert import BertTokenizer
 from transformers import AdamW, get_linear_schedule_with_warmup
 from data_helper import CustomDataset, collate_fn, pad_to_maxlen, load_data, load_test_data
 import logging
+import datetime
 
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
@@ -51,39 +52,52 @@ def get_sent_id_tensor(s_list):
     return all_input_ids, all_input_mask, all_segment_ids
 
 def evaluate(device):
-    sent1, sent2, label = load_test_data(args.test_data, max_label=2)
+    sent1, sent2, label = load_test_data(args.test_data, max_label=3)
     all_a_vecs = []
     all_b_vecs = []
     all_labels = []
     device = torch.device(device)
     model.to(device)
     model.eval()
-    for s1, s2, lab in tqdm(zip(sent1, sent2, label)):
-        input_ids, input_mask, segment_ids = get_sent_id_tensor([s1, s2])
-        lab = torch.tensor([lab], dtype=torch.float)
-        input_ids = input_ids.to(device)
-        input_mask = input_mask.to(device)
-        segment_ids = segment_ids.to(device)
-        lab = lab.to(device)
-        # if torch.cuda.is_available():
-        #     input_ids, input_mask, segment_ids = input_ids.cuda(), input_mask.cuda(), segment_ids.cuda()
-        #     lab = lab.cuda()
+        # 创建输出目录
+    corrcoef = 100.0
 
-        with torch.no_grad():
-            output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
-        output = output.to(device)
-        all_a_vecs.append(output[0].cpu().numpy())
-        all_b_vecs.append(output[1].cpu().numpy())
-        all_labels.extend(lab.cpu().numpy())
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    log_file = os.path.join(args.output_dir, f"log-{timestamp}.txt")
+    with open(log_file, "w") as log:
+        log.write("Evaluation started at {}\n".format(timestamp))
+        for i, (s1, s2, lab) in enumerate(tqdm(zip(sent1, sent2, label))):
+            input_ids, input_mask, segment_ids = get_sent_id_tensor([s1, s2])
+            lab = torch.tensor([lab], dtype=torch.float)
+            input_ids = input_ids.to(device)
+            input_mask = input_mask.to(device)
+            segment_ids = segment_ids.to(device)
+            lab = lab.to(device)
+            # if torch.cuda.is_available():
+            #     input_ids, input_mask, segment_ids = input_ids.cuda(), input_mask.cuda(), segment_ids.cuda()
+            #     lab = lab.cuda()
 
-    all_a_vecs = np.array(all_a_vecs)
-    all_b_vecs = np.array(all_b_vecs)
-    all_labels = np.array(all_labels)
+            with torch.no_grad():
+                output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
+            output = output.to(device)
+            all_a_vecs.append(output[0].cpu().numpy())
+            all_b_vecs.append(output[1].cpu().numpy())
+            all_labels.extend(lab.cpu().numpy())
+            # 每100个样本打印一次信息
+            if i % 100 == 0:
+                log.write(f"Processed {i} samples\n")
+                print(f"Processed {i} samples")
 
-    a_vecs = l2_normalize(all_a_vecs)
-    b_vecs = l2_normalize(all_b_vecs)
-    sims = (a_vecs * b_vecs).sum(axis=1)
-    corrcoef = compute_corrcoef(all_labels, sims)
+        all_a_vecs = np.array(all_a_vecs)
+        all_b_vecs = np.array(all_b_vecs)
+        all_labels = np.array(all_labels)
+
+        a_vecs = l2_normalize(all_a_vecs)
+        b_vecs = l2_normalize(all_b_vecs)
+        sims = (a_vecs * b_vecs).sum(axis=1)
+        corrcoef = compute_corrcoef(all_labels, sims)
+        log.write(f"Correlation coefficient: {corrcoef}\n")
+        print(f"Correlation coefficient: {corrcoef}")
     return corrcoef
 
 def calc_loss(y_true, y_pred, device):
@@ -112,7 +126,10 @@ def calc_loss(y_true, y_pred, device):
 if __name__ == '__main__':
     args = set_args()
     set_seed()
-    os.makedirs(args.output_dir, exist_ok=True)
+
+    # 创建输出目录
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
 
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
 

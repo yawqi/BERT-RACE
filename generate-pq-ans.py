@@ -83,7 +83,7 @@ def process_replace_words(c3_type_0, i):
         print("{} done, {} to do".format(i, len(c3_type_0) - i))
     return c3_type_0[i]
 
-def generate_C3(c2, c4, c5, num_threads=8):
+def generate_C3(c2, c4, c5, num_threads=32):
     type_0_count = len(c2) // 2
     type_1_count = len(c2) - type_0_count
     c3_type_0 = random.sample(c2, type_0_count)

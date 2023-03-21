@@ -7,10 +7,10 @@ def set_args():
     # ./data/LCQMC/LCQMC.train.data
     # ./data/PAWSX/PAWSX.train.data
     # ./data/STS-B/STS-B.train.data 
-    parser.add_argument('--train_data', default='./TASK-3-DATA/dev', type=str, help='训练数据集')
+    parser.add_argument('--train_data', default='./TASK-3-DATA/train', type=str, help='训练数据集')
     parser.add_argument('--test_data', default='./TASK-3-DATA/test', type=str, help='测试数据集')
 
-    parser.add_argument('--pretrained_model_path', default='./output-2/task-2-bert-base-uncased-2023-03-20_03-01-45', type=str, help='预训练模型的路径')
+    parser.add_argument('--pretrained_model_path', default='./output-2/task-2-.-output-1-task-1-bert-base-uncased-2023-03-19_13-49-21-2023-03-20_14-25-23', type=str, help='预训练模型的路径')
     parser.add_argument('--output_dir', default='./output-3', type=str, help='模型输出')
     parser.add_argument('--num_train_epochs', default=3, type=int, help='训练几轮')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
