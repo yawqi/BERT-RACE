@@ -51,7 +51,7 @@ def get_sent_id_tensor(s_list):
     all_segment_ids = torch.tensor(token_type_ids, dtype=torch.long)
     return all_input_ids, all_input_mask, all_segment_ids
 
-def evaluate(device):
+def evaluate(device, cur_dir):
     sent1, sent2, label = load_test_data(args.test_data, max_label=3)
     all_a_vecs = []
     all_b_vecs = []
@@ -62,8 +62,9 @@ def evaluate(device):
         # 创建输出目录
     corrcoef = 100.0
 
-    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
-    log_file = os.path.join(args.output_dir, f"log-{timestamp}.txt")
+    if not os.path.exists(cur_dir):
+        os.makedirs(cur_dir)
+    log_file = os.path.join(cur_dir, "evaluation-log.txt")
     with open(log_file, "w") as log:
         log.write("Evaluation started at {}\n".format(timestamp))
         for i, (s1, s2, lab) in enumerate(tqdm(zip(sent1, sent2, label))):
@@ -95,9 +96,30 @@ def evaluate(device):
         a_vecs = l2_normalize(all_a_vecs)
         b_vecs = l2_normalize(all_b_vecs)
         sims = (a_vecs * b_vecs).sum(axis=1)
-        corrcoef = compute_corrcoef(all_labels, sims)
-        log.write(f"Correlation coefficient: {corrcoef}\n")
-        print(f"Correlation coefficient: {corrcoef}")
+
+        c1_c2_labels = [a for a, b in zip(all_labels, sims) if a == 1 or a == 2]
+        c1_c2_sims = [b for a, b in zip(all_labels, sims) if a == 1 or a == 2]
+        
+        c1_c3_labels = [a for a, b in zip(all_labels, sims) if a == 0 or a == 2]
+        c1_c3_sims = [b for a, b in zip(all_labels, sims) if a == 0 or a == 2]
+
+        c2_c3_labels = [a for a, b in zip(all_labels, sims) if a == 1 or a == 0]
+        c2_c3_sims = [b for a, b in zip(all_labels, sims) if a == 1 or a == 0]
+        corrcoef_all = compute_corrcoef(all_labels, sims)
+        corrcoef_c1_c2 = compute_corrcoef(c1_c2_labels, c1_c2_sims)
+        corrcoef_c1_c3 = compute_corrcoef(c1_c3_labels, c1_c3_sims)
+        corrcoef_c2_c3 = compute_corrcoef(c2_c3_labels, c2_c3_sims)
+
+        log.write(f"All correlation coefficient: {corrcoef_all}\n")
+        log.write(f"C1 C2 correlation coefficient: {corrcoef_c1_c2}\n")
+        log.write(f"C1 C3 correlation coefficient: {corrcoef_c1_c3}\n")
+        log.write(f"C2 C3 correlation coefficient: {corrcoef_c2_c3}\n")
+        
+        print(f"All correlation coefficient: {corrcoef_all}")
+        print(f"C1 C2 correlation coefficient: {corrcoef_c1_c2}")
+        print(f"C1 C3 correlation coefficient: {corrcoef_c1_c3}")
+        print(f"C2 C3 correlation coefficient: {corrcoef_c2_c3}")
+
     return corrcoef
 
 def calc_loss(y_true, y_pred, device):
@@ -128,8 +150,10 @@ if __name__ == '__main__':
     set_seed()
 
     # 创建输出目录
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d-%H-%M-%S")
+    cur_dir = os.path.join(args.output_dir, f"{timestamp}")
+    if not os.path.exists(cur_dir):
+        os.makedirs(cur_dir)
 
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
 
@@ -183,8 +207,13 @@ if __name__ == '__main__':
             output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
             loss = calc_loss(label_ids, output, device=args.device)
             loss.backward()
-            print("当前轮次:{}, 正在迭代:{}/{}, Loss:{:10f}".format(epoch, step, len(train_dataloader), loss))  # 在进度条前面定义一段文字
+            s = "当前轮次:{}, 正在迭代:{}/{}, Loss:{:10f}".format(epoch, step, len(train_dataloader), loss)
+            print(s)  # 在进度条前面定义一段文字
             # nn.utils.clip_grad_norm_(model.parameters(), max_norm=20, norm_type=2)
+            log_path = os.path.join(cur_dir, 'logs.txt')
+            with open(log_path, 'a+') as f:
+                s += '\n'
+                f.write(s)
             epoch_loss += loss
 
             if (step + 1) % args.gradient_accumulation_steps == 0:
@@ -192,13 +221,13 @@ if __name__ == '__main__':
                 scheduler.step()
                 optimizer.zero_grad()
 
-        corr = evaluate(args.device)
+        corr = evaluate(args.device, cur_dir)
         s = 'Epoch:{} | corr: {:10f}'.format(epoch, corr)
-        logs_path = os.path.join(args.output_dir, 'logs.txt')
+        logs_path = os.path.join(cur_dir, 'result-logs.txt')
         with open(logs_path, 'a+') as f:
             s += '\n'
             f.write(s)
 
         model_to_save = model.module if hasattr(model, 'module') else model  # Only save the model it-self
-        output_model_file = os.path.join(args.output_dir, "base_model_epoch_{}.bin".format(epoch))
+        output_model_file = os.path.join(cur_dir, "base_model_epoch_{}.bin".format(epoch))
         torch.save(model_to_save.state_dict(), output_model_file)

@@ -10,6 +10,8 @@ import os
 import glob
 import re
 import json
+import torch
+from CustomLabelAccuracyEvaluator import CustomLabelAccuracyEvaluator
 
 #### Just some code to print debug information to stdout
 logging.basicConfig(format='%(asctime)s - %(message)s',
@@ -35,6 +37,7 @@ def read_data_from_path(path, max_label):
                 # pid = int(match.group(1))
                 data_raw = json.load(fpr)
                 examples.append(InputExample(texts=[data_raw['s1'], data_raw['s2']], label=label))
+                print('label:{}'.format(label))
     return examples
 
 #You can specify any huggingface/transformers pre-trained model here, for example, bert-base-uncased, roberta-base, xlm-roberta-base
@@ -62,7 +65,7 @@ pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension
                                pooling_mode_cls_token=False,
                                pooling_mode_max_tokens=False)
 
-model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device="cuda:1")
+model = SentenceTransformer(modules=[word_embedding_model, pooling_model], device=device_name)
 
 # Convert the dataset to a DataLoader ready for training
 logging.info("Read Task1 train dataset")
@@ -71,9 +74,9 @@ train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batc
 dev_dataloader = DataLoader(dev_samples, shuffle=True, batch_size=train_batch_size)
 
 train_loss = losses.SoftmaxLoss(model=model, sentence_embedding_dimension=model.get_sentence_embedding_dimension(), num_labels=num_labels)
-
+train_loss.to(device_name)
 logging.info("Read Task-1 dev dataset")
-evaluator = LabelAccuracyEvaluator(dev_dataloader, softmax_model=train_loss, name='task1-dev')
+evaluator = CustomLabelAccuracyEvaluator(dev_dataloader, softmax_model=train_loss, name='task1-dev', device=device_name)
 
 # Configure the training. We skip evaluation in this example
 warmup_steps = math.ceil(len(train_dataloader) * num_epochs  * 0.1) #10% of train data for warm-up
@@ -83,9 +86,12 @@ logging.info("Warmup-steps: {}".format(warmup_steps))
 model.fit(train_objectives=[(train_dataloader, train_loss)],
           evaluator=evaluator,
           epochs=num_epochs,
-          evaluation_steps=1000,
+          evaluation_steps=2500,
           warmup_steps=warmup_steps,
           output_path=task_1_model_save_path)
+
+softmax_loss_path = os.path.join(task_1_model_save_path, "softmax_loss.pth")
+torch.save(train_loss.classifier.state_dict(), softmax_loss_path)
 
 ##############################################################################
 #
@@ -94,91 +100,10 @@ model.fit(train_objectives=[(train_dataloader, train_loss)],
 ##############################################################################
 
 test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'), max_label=num_labels)
-# model = SentenceTransformer(task_1_model_save_path, device=device_name)
+model = SentenceTransformer(task_1_model_save_path, device=device_name)
+test_loss = losses.SoftmaxLoss(model=model, sentence_embedding_dimension=model.get_sentence_embedding_dimension(), num_labels=num_labels)
+test_loss.classifier.load_state_dict(torch.load(softmax_loss_path))
+test_loss.to(device_name)
 test_dataloader = DataLoader(test_samples, shuffle=True, batch_size=train_batch_size)
-test_evaluator = LabelAccuracyEvaluator(test_dataloader, name='task1-test', softmax_model=train_loss)
+test_evaluator = CustomLabelAccuracyEvaluator(test_dataloader, name='task1-test', softmax_model=train_loss, device=device_name)
 test_evaluator(model, output_path=task_1_model_save_path)
-
-##############################################################################
-#
-# Task 2
-#
-##############################################################################
-# import torch
-# from torch import nn, Tensor
-# from typing import Iterable, Dict
-
-# class CoSentLoss(nn.Module):
-#     """
-#     CosineSimilarityLoss expects, that the InputExamples consists of two texts and a float label.
-
-#     It computes the vectors u = model(input_text[0]) and v = model(input_text[1]) and measures the cosine-similarity between the two.
-#     By default, it minimizes the following loss: ||input_label - cos_score_transformation(cosine_sim(u,v))||_2.
-
-#     :param model: SentenceTranformer model
-#     :param loss_fct: Which pytorch loss function should be used to compare the cosine_similartiy(u,v) with the input_label? By default, MSE:  ||input_label - cosine_sim(u,v)||_2
-#     :param cos_score_transformation: The cos_score_transformation function is applied on top of cosine_similarity. By default, the identify function is used (i.e. no change).
-
-#     Example::
-
-#             from sentence_transformers import SentenceTransformer, SentencesDataset, InputExample, losses
-
-#             model = SentenceTransformer('distilbert-base-nli-mean-tokens')
-#             train_examples = [InputExample(texts=['My first sentence', 'My second sentence'], label=0.8),
-#                 InputExample(texts=['Another pair', 'Unrelated sentence'], label=0.3)]
-#             train_dataset = SentencesDataset(train_examples, model)
-#             train_dataloader = DataLoader(train_dataset, shuffle=True, batch_size=train_batch_size)
-#             train_loss = losses.CosineSimilarityLoss(model=model)
-
-
-#     """
-#     def __init__(self, model: SentenceTransformer):
-#         super(CoSentLoss, self).__init__()
-#         self.model = model
-#         # self.cos_score_transformation = cos_score_transformation
-
-#     def forward(self, sentence_features: Iterable[Dict[str, Tensor]], labels: Tensor):
-#         embeddings = [self.model(sentence_feature)['sentence_embedding'] for sentence_feature in sentence_features]
-#         output = self.cos_score_transformation(torch.cosine_similarity(embeddings[0], embeddings[1]))
-#         return self.loss_fct(output, labels.view(-1))
-
-# train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'), max_label = 2)[::3]
-# dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'), max_label = 2)
-# test_samples = read_data_from_path(os.path.join(task_1_data_dir, 'test'), max_label= 2)
-
-# word_embedding_model_2 = models.Transformer(task_1_model_save_path)
-# model = SentenceTransformer(modules=[word_embedding_model_2,])
-
-# train_dataloader = DataLoader(train_samples, shuffle=True, batch_size=train_batch_size)
-# train_loss = losses.SoftmaxLoss(
-#     model=model,
-#     sentence_embedding_dimension=model.get_sentence_embedding_dimension(),
-#     num_labels=num_labels,
-#     concatenation_sent_rep = True,
-#     concatenation_sent_difference = True
-# )
-
-# logging.info("Read Task-2 dev dataset")
-# # evaluator = EmbeddingSimilarityEvaluator.from_input_examples(dev_samples, name='task2-dev')
-
-# # Configure the training. We skip evaluation in this example
-# warmup_steps = math.ceil(len(train_dataloader) * num_epochs  * 0.1) #10% of train data for warm-up
-# logging.info("Warmup-steps: {}".format(warmup_steps))
-
-# # Train the model
-# model.fit(train_objectives=[(train_dataloader, train_loss)],
-#         #   evaluator=evaluator,
-#           epochs=num_epochs,
-#           evaluation_steps=1000,
-#           warmup_steps=warmup_steps,
-#           output_path=task_2_model_save_path)
-
-# ##############################################################################
-# #
-# # Load the stored model and evaluate its performance on task1 benchmark dataset
-# #
-# ##############################################################################
-
-# model = SentenceTransformer(task_2_model_save_path)
-# test_evaluator = EmbeddingSimilarityEvaluator.from_input_examples(test_samples, name='task2-test')
-# test_evaluator(model, output_path=task_2_model_save_path)
