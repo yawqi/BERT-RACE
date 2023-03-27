@@ -29,7 +29,7 @@ def compute_corrcoef(x, y):
     return scipy.stats.spearmanr(x, y).correlation
 
 def compute_pearsonr(x, y):
-    return scipy.stats.perasonr(x, y)[0]
+    return scipy.stats.pearsonr(x, y)[0]
 
 def set_seed():
     random.seed(args.seed)
@@ -110,16 +110,28 @@ def evaluate(device, cur_dir):
         corrcoef_c1_c3 = compute_corrcoef(c1_c3_labels, c1_c3_sims)
         corrcoef_c2_c3 = compute_corrcoef(c2_c3_labels, c2_c3_sims)
 
+        p_all = compute_pearsonr(all_labels, sims)
+        p_c1_c2 = compute_pearsonr(c1_c2_labels, c1_c2_sims)
+        p_c1_c3 = compute_pearsonr(c1_c3_labels, c1_c3_sims)
+        p_c2_c3 = compute_pearsonr(c2_c3_labels, c2_c3_sims)
+
         log.write(f"All correlation coefficient: {corrcoef_all}\n")
         log.write(f"C1 C2 correlation coefficient: {corrcoef_c1_c2}\n")
         log.write(f"C1 C3 correlation coefficient: {corrcoef_c1_c3}\n")
         log.write(f"C2 C3 correlation coefficient: {corrcoef_c2_c3}\n")
-        
+        log.write(f"All pearson: {p_all}\n")
+        log.write(f"C1 C2 pearson: {p_c1_c2}\n")
+        log.write(f"C1 C3 pearson: {p_c1_c3}\n")
+        log.write(f"C2 C3 pearson: {p_c2_c3}\n")
+
         print(f"All correlation coefficient: {corrcoef_all}")
         print(f"C1 C2 correlation coefficient: {corrcoef_c1_c2}")
         print(f"C1 C3 correlation coefficient: {corrcoef_c1_c3}")
         print(f"C2 C3 correlation coefficient: {corrcoef_c2_c3}")
-
+        print(f"All pearson: {p_all}")
+        print(f"C1 C2 pearson: {p_c1_c2}")
+        print(f"C1 C3 pearson: {p_c1_c3}")
+        print(f"C2 C3 pearson: {p_c2_c3}")
     return corrcoef
 
 def calc_loss(y_true, y_pred, device):
@@ -169,7 +181,7 @@ if __name__ == '__main__':
     num_train_optimization_steps = int(
         len(train_dataset) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
 
-    model = Model(pretrain_model_path_or_name=args.pretrained_model_path)
+    model = Model(pretrain_model_path_or_name=args.pretrained_model_path, froze_params=False)
     device = torch.device(args.device)
     model.to(device)
     # if torch.cuda.is_available():

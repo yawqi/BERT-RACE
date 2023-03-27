@@ -3,10 +3,12 @@ from torch import nn
 from transformers import BertConfig, BertModel
 
 class Model(nn.Module):
-    def __init__(self, pretrain_model_path_or_name='bert-base-uncased'):
+    def __init__(self, pretrain_model_path_or_name='bert-base-uncased', froze_params = False):
         super(Model, self).__init__()
         self.config = BertConfig.from_pretrained(pretrain_model_path_or_name)
         self.bert = BertModel.from_pretrained(pretrain_model_path_or_name, config=self.config)
+        for param in self.bert.parameters():
+            param.requires_grad = not froze_params
 
     def forward(self, input_ids, attention_mask, encoder_type='fist-last-avg'):
         '''
