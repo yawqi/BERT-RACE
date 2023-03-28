@@ -53,7 +53,7 @@ num_labels = 2
 device_name = "cuda:0"
 train_samples = read_data_from_path(os.path.join(task_2_data_dir, 'train'), 2)
 dev_samples = read_data_from_path(os.path.join(task_2_data_dir, 'dev'), 2)
-froze_params = True
+froze_params = False
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
 for param in word_embedding_model.parameters():

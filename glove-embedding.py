@@ -9,13 +9,13 @@ import numpy as np
 
 glove = GloVe(name='840B', dim=300)
 nlp = spacy.load('en_core_web_sm')
-nltk.download("punkt")
+# nltk.download("punkt")
 data_dir = "./RACE"
 train_dir = os.path.join(data_dir, 'train')
 dev_dir = os.path.join(data_dir, 'dev')
 test_dir = os.path.join(data_dir, 'test')
 
-new_dir = "./NEW-RACE"
+new_dir = "./NEW-RACE200"
 new_dev_dir = os.path.join(new_dir, 'dev')
 new_train_dir = os.path.join(new_dir, 'train')
 new_test_dir = os.path.join(new_dir, 'test')
@@ -118,7 +118,7 @@ def find_top_k_similarities(vectors, target_vector, k):
     return [(vectors[i], similarities[i]) for i in top_k_indices], top_k_indices
 
 def main():
-    articles, questions, answers, dis = read_race_examples([test_dir + '/middle', test_dir + '/high'])
+    articles, questions, answers, dis = read_race_examples(['./RACE200'])
     v_articles = [vectorize(v) for v in articles]
     v_qas = []
 
