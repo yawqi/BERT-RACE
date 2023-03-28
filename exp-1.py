@@ -10,7 +10,7 @@ import argparse
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
-                    filename = "exp.log",)
+                    filename = "exp-cls.log",)
 
 from transformers import BertTokenizer, BertModel
 import torch
@@ -28,6 +28,19 @@ def bleu_score(reference_sentence, candidate_sentence):
     reference = [reference_tokens]
     return sentence_bleu(reference, candidate_tokens)
 
+# def get_embeddings(model, text, device):
+#     # 对输入文本进行tokenization
+#     input_tokens = tokenizer(text, return_tensors="pt")
+#     input_tokens.to(device)
+#     # 使用BERT模型获取词嵌入
+#     with torch.no_grad():
+#         outputs = model(**input_tokens)
+#         embeddings = outputs.last_hidden_state
+
+#     # 计算整个句子的嵌入，即各个token嵌入的平均值
+#     sentence_embedding = torch.mean(embeddings, dim=1)
+#     return sentence_embedding
+
 def get_embeddings(model, text, device):
     # 对输入文本进行tokenization
     input_tokens = tokenizer(text, return_tensors="pt")
@@ -37,9 +50,10 @@ def get_embeddings(model, text, device):
         outputs = model(**input_tokens)
         embeddings = outputs.last_hidden_state
 
-    # 计算整个句子的嵌入，即各个token嵌入的平均值
-    sentence_embedding = torch.mean(embeddings, dim=1)
-    return sentence_embedding
+    # 获取[CLS]标记的向量作为句子的全局表示
+    cls_embedding = embeddings[:, 0, :]
+    return cls_embedding
+
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
@@ -48,7 +62,7 @@ def set_args():
     parser.add_argument('--output_dir', default='./exp-result', type=str, help='模型输出')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
     parser.add_argument('--val_batch_size', default=32, type=int, help='验证批次大小')
-    parser.add_argument('--device', default='cuda:1', type=str, help='device name "cuda:#"')
+    parser.add_argument('--device', default='cpu', type=str, help='device name "cuda:#"')
     return parser.parse_args()
 
 def read_q_from_p(pid, path):
@@ -84,7 +98,7 @@ if __name__ == '__main__':
 
     path = './NEW-RACE200'
     PQs, As, Ds = [],[],[]
-    for i in range(200):
+    for i in range(10):
         pq, a, d, qid = read_q_from_p(i, path)
         pq_e = get_embeddings(model, pq, device)
         a_e = get_embeddings(model, a, device)
@@ -102,28 +116,33 @@ if __name__ == '__main__':
 
         logging.info(f"pid: {i}, qid: {qid}")
         for j in range(3):
-            bleu_score_0 = bleu_score(d[j], d[0])
-            bleu_score_1 = bleu_score(d[j], d[1])
-            bleu_score_2 = bleu_score(d[j], d[2])
+            logging.info(f"\t d[{j}]: {d[j]}")
+            sim_pq_d = cosine_similarity(pq_e, d_e[j]).item()
+            sim_ans_d = cosine_similarity(a_e, d_e[j]).item()
+            sc = (2.0 + sim_pq_d - sim_ans_d) / 4.0
 
-            bert_score_0_p, bert_score_0_r, bert_score_0_f = score([d[0]], [d[j]], lang="en", model_type="bert-base-uncased")
-            bert_score_1_p, bert_score_1_r, bert_score_1_f = score([d[1]], [d[j]], lang="en", model_type="bert-base-uncased")
-            bert_score_2_p, bert_score_2_r, bert_score_2_f = score([d[2]], [d[j]], lang="en", model_type="bert-base-uncased")
+            sim_pq_d_base = cosine_similarity(pq_e_base, d_e_base[j]).item()
+            sim_ans_d_base = cosine_similarity(a_e_base, d_e_base[j]).item()
+            sc_base = (2.0 + sim_pq_d_base - sim_ans_d_base) / 4.0
+            logging.info(f"\tsc {j}, {sc} pq_d: {sim_pq_d}, ans_d: {sim_ans_d}")
+            logging.info(f"\tsc_base {j}: {sc_base}, pq_d: {sim_pq_d_base}, ans_d: {sim_ans_d_base}")
 
-            sim_pq_d = cosine_similarity(pq_e, d_e[j])
-            sim_ans_d = cosine_similarity(a_e, d_e[j])
-            sc = (2.0 + sim_pq_d.item() - sim_ans_d.item()) / 4.0
+            for k in range(3):
+                bleu_score_k = bleu_score(d[j], d[k])
+                # bleu_score_1 = bleu_score(d[j], d[1])
+                # bleu_score_2 = bleu_score(d[j], d[2])
 
-            sim_pq_d_base = cosine_similarity(pq_e_base, d_e_base[j])
-            sim_ans_d_base = cosine_similarity(a_e_base, d_e_base[j])
-            sc_base = (2.0 + sim_pq_d_base.item() - sim_ans_d_base.item()) / 4.0
-            logging.info(f"d[{j}] {d[j]} as reference")
-            logging.info(f"bleu score: {bleu_score_0}, {bleu_score_1}, {bleu_score_2}")
-            logging.info(f"bert score 0, precision: {bert_score_0_p.item()}, recall: {bert_score_0_r.item()}, f1: {bert_score_0_f.item()}")
-            logging.info(f"bert score 1, precision: {bert_score_1_p.item()}, recall: {bert_score_1_r.item()}, f1: {bert_score_1_f.item()}")
-            logging.info(f"bert score 2, precision: {bert_score_2_p.item()}, recall: {bert_score_2_r.item()}, f1: {bert_score_2_f.item()}")
-            logging.info(f"sc: {sc.item()} pq_d: {sim_pq_d.item()}, ans_d: {sim_ans_d.item()}")
-            logging.info(f"sc_base: {sc_base.item()}, pq_d: {sim_pq_d_base.item()}, ans_d: {sim_ans_d_base.item()}")
+                bert_score_k_p, bert_score_k_r, bert_score_k_f = score([d[k]], [d[j]], lang="en", model_type="bert-base-uncased")
+                # bert_score_1_p, bert_score_1_r, bert_score_1_f = score([d[1]], [d[j]], lang="en", model_type="bert-base-uncased")
+                # bert_score_2_p, bert_score_2_r, bert_score_2_f = score([d[2]], [d[j]], lang="en", model_type="bert-base-uncased")
+
+
+                # logging.info(f"d[{j}] {d[j]} as reference")
+                logging.info(f"\t\tbleu score {k}, {bleu_score_k}")
+                logging.info(f"\t\tbert score {k}, f1: {bert_score_k_f.item()}, precision: {bert_score_k_p.item()}, recall: {bert_score_k_r.item()}")
+                # logging.info(f"\t\tbert score 1, precision: {bert_score_1_p.item()}, recall: {bert_score_1_r.item()}, f1: {bert_score_1_f.item()}")
+                # logging.info(f"bert score 2, precision: {bert_score_2_p.item()}, recall: {bert_score_2_r.item()}, f1: {bert_score_2_f.item()}")
+
     #    # 输入文本
     # text1 = "This is an example sentence."
     # text2 = "Here is another example."

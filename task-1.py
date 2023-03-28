@@ -48,13 +48,13 @@ num_epochs = 3
 
 task_1_data_dir = './RACE-SR-NEW'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_1_model_save_path = 'output-1-(3->1)/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
+task_1_model_save_path = 'output-1-(2->1)/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_1_model_save_path = 'output-1/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
 num_labels = 5
-device_name = "cuda:0"
+device_name = "cuda:1"
 froze_params = False
 train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'), max_label=num_labels)
 dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'), max_label=num_labels)
