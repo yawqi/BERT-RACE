@@ -79,7 +79,7 @@ def evaluate(device, cur_dir):
             #     lab = lab.cuda()
 
             with torch.no_grad():
-                output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
+                output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type=encoder_type)
             output = output.to(device)
             all_a_vecs.append(output[0].cpu().numpy())
             all_b_vecs.append(output[1].cpu().numpy())
@@ -166,12 +166,12 @@ if __name__ == '__main__':
     cur_dir = os.path.join(args.output_dir, f"{timestamp}")
     if not os.path.exists(cur_dir):
         os.makedirs(cur_dir)
-
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
 
     # 加载数据集
     train_sentence, train_label = load_data(args.train_data, max_label=3)
-
+    last_three = True
+    encoder_type = 'cls'
     train_dataset = CustomDataset(sentence=train_sentence, label=train_label, tokenizer=tokenizer)
     train_dataloader = DataLoader(dataset=train_dataset, shuffle=False, batch_size=args.train_batch_size,
                                   collate_fn=collate_fn, num_workers=1)
@@ -181,7 +181,7 @@ if __name__ == '__main__':
     num_train_optimization_steps = int(
         len(train_dataset) / args.train_batch_size / args.gradient_accumulation_steps) * args.num_train_epochs
 
-    model = Model(pretrain_model_path_or_name=args.pretrained_model_path, froze_params=False)
+    model = Model(pretrain_model_path_or_name=args.pretrained_model_path, froze_params=False, last_three = last_three)
     device = torch.device(args.device)
     model.to(device)
     # if torch.cuda.is_available():
@@ -216,7 +216,7 @@ if __name__ == '__main__':
             input_mask = input_mask.to(device)
             segment_ids = segment_ids.to(device)
             label_ids = label_ids.to(device)
-            output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type='fist-last-avg')
+            output = model(input_ids=input_ids, attention_mask=input_mask, encoder_type=encoder_type)
             loss = calc_loss(label_ids, output, device=args.device)
             loss.backward()
             s = "当前轮次:{}, 正在迭代:{}/{}, Loss:{:10f}".format(epoch, step, len(train_dataloader), loss)

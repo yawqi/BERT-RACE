@@ -45,12 +45,12 @@ num_epochs = 3
 
 task_2_data_dir = './TASK-2-DATA'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_2_model_save_path = 'output-2-frozen/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
+task_2_model_save_path = 'output-2-(3->1->2)/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
 num_labels = 2
-device_name = "cuda:0"
+device_name = "cuda:1"
 train_samples = read_data_from_path(os.path.join(task_2_data_dir, 'train'), 2)
 dev_samples = read_data_from_path(os.path.join(task_2_data_dir, 'dev'), 2)
 froze_params = False

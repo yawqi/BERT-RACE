@@ -48,21 +48,29 @@ num_epochs = 3
 
 task_1_data_dir = './RACE-SR-NEW'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_1_model_save_path = 'output-1-(2->1)/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
+task_1_model_save_path = 'output-1-last-three-mean/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_1_model_save_path = 'output-1/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
 num_labels = 5
-device_name = "cuda:1"
+device_name = "cuda:0"
 froze_params = False
+last_three = True
 train_samples = read_data_from_path(os.path.join(task_1_data_dir, 'train'), max_label=num_labels)
 dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'), max_label=num_labels)
 
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
-for param in word_embedding_model.parameters():
-    param.requires_grad = not froze_params
+if froze_params:
+    for param in word_embedding_model.parameters():
+        param.requires_grad = False
+if last_three:
+    for param in word_embedding_model.parameters():
+        param.requires_grad = False
+    for param in word_embedding_model.auto_model.encoder.layer[-3:].parameters():
+        param.requires_grad = True
+
 # Apply mean pooling to get one fixed sized sentence vector
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
                                pooling_mode_mean_tokens=True,

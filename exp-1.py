@@ -7,10 +7,7 @@ import logging
 import datetime
 import argparse
 
-logging.basicConfig(format='%(asctime)s - %(message)s',
-                    datefmt='%Y-%m-%d %H:%M:%S',
-                    level=logging.INFO,
-                    filename = "exp-cls.log",)
+
 
 from transformers import BertTokenizer, BertModel
 import torch
@@ -49,11 +46,20 @@ def get_embeddings(model, text, device):
     with torch.no_grad():
         outputs = model(**input_tokens)
         embeddings = outputs.last_hidden_state
+    # # 计算整个句子的嵌入，即各个token嵌入的平均值
+    # sentence_embedding = torch.mean(embeddings, dim=1)
+    # return sentence_embedding
+    # # 获取[CLS]标记的向量作为句子的全局表示
+    # cls_embedding = embeddings[:, 0, :]
+    # return cls_embedding
+    # 获取每个词嵌入的最大值组成的向量作为句子的全局表示
+    max_embeddings, _ = torch.max(embeddings, dim=1)
+    return max_embeddings
 
-    # 获取[CLS]标记的向量作为句子的全局表示
-    cls_embedding = embeddings[:, 0, :]
-    return cls_embedding
-
+logging.basicConfig(format='%(asctime)s - %(message)s',
+                    datefmt='%Y-%m-%d %H:%M:%S',
+                    level=logging.INFO,
+                    filename = "exp-task-1-2-3-mean-test.log",)
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
@@ -62,7 +68,7 @@ def set_args():
     parser.add_argument('--output_dir', default='./exp-result', type=str, help='模型输出')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
     parser.add_argument('--val_batch_size', default=32, type=int, help='验证批次大小')
-    parser.add_argument('--device', default='cpu', type=str, help='device name "cuda:#"')
+    parser.add_argument('--device', default='cuda:1', type=str, help='device name "cuda:#"')
     return parser.parse_args()
 
 def read_q_from_p(pid, path):
@@ -77,6 +83,13 @@ def read_q_from_p(pid, path):
         d = data_raw['D'][:3]
     return pq, ans, d, qid
 
+def regulate_score(sc):
+    if sc > 1.0:
+        sc = 1.0
+    elif sc < 0.0:
+        sc = 0.0
+    return sc
+
 if __name__ == '__main__':
     args = set_args()
     # 创建输出目录
@@ -87,6 +100,7 @@ if __name__ == '__main__':
 
     # 加载数据集
     # model_name_or_path = 'bert-base-uncased'
+    path = args.test_data
     tokenizer = BertTokenizer.from_pretrained(args.pretrained_model_path)
     model = BertModel.from_pretrained(args.pretrained_model_path)
     tokenizer_base = BertTokenizer.from_pretrained('bert-base-uncased')
@@ -95,8 +109,16 @@ if __name__ == '__main__':
     device = torch.device(args.device)
     model.to(device)
     model_base.to(device)
+    max1 = 0.8831976062590684
+    min1 = 0.6872149770374236
+    max1_base = 0.7196728859138961
+    min1_base = 0.6931317631658842
+    
+    max2 = 0.7601640452904506
+    min2 = 0.2911913025747514
+    max2_base = 0.570139534964524
+    min2_base = 0.5321969872166371
 
-    path = './NEW-RACE200'
     PQs, As, Ds = [],[],[]
     for i in range(10):
         pq, a, d, qid = read_q_from_p(i, path)
@@ -119,14 +141,22 @@ if __name__ == '__main__':
             logging.info(f"\t d[{j}]: {d[j]}")
             sim_pq_d = cosine_similarity(pq_e, d_e[j]).item()
             sim_ans_d = cosine_similarity(a_e, d_e[j]).item()
-            sc = (2.0 + sim_pq_d - sim_ans_d) / 4.0
-
+            sc_pq_ans = (sim_pq_d - min1) / (max1 - min1)
+            sc_ans_di = (max2 - sim_ans_d) / (max2 - min2)
+            sc_avg = (sc_pq_ans + sc_ans_di) / 2.0
             sim_pq_d_base = cosine_similarity(pq_e_base, d_e_base[j]).item()
             sim_ans_d_base = cosine_similarity(a_e_base, d_e_base[j]).item()
-            sc_base = (2.0 + sim_pq_d_base - sim_ans_d_base) / 4.0
-            logging.info(f"\tsc {j}, {sc} pq_d: {sim_pq_d}, ans_d: {sim_ans_d}")
-            logging.info(f"\tsc_base {j}: {sc_base}, pq_d: {sim_pq_d_base}, ans_d: {sim_ans_d_base}")
-
+            sc_pq_ans_base = (sim_pq_d_base - min1_base) / (max1_base - min1_base)
+            sc_ans_di_base = (max2_base - sim_ans_d_base) / (max2_base - min2_base)
+            sc_avg_base = (sc_pq_ans_base + sc_ans_di_base) / 2.0
+            logging.info(f"\tsc {j}, average score: {sc_avg}, pq ans score: {sc_pq_ans}, ans di score: {sc_ans_di}, pq_d: {sim_pq_d}, ans_d: {sim_ans_d}")
+            logging.info(f"\tsc_base {j}, average score: {sc_avg_base}, pq ans score {sc_pq_ans_base}, ans di score: {sc_ans_di_base}, pq_d: {sim_pq_d_base}, ans_d: {sim_ans_d_base}")
+            sc_pq_ans, sc_ans_di = regulate_score(sc_pq_ans), regulate_score(sc_ans_di)
+            sc_pq_ans_base, sc_ans_di_base = regulate_score(sc_pq_ans_base), regulate_score(sc_ans_di_base)
+            sc_avg, sc_avg_base = (sc_pq_ans + sc_ans_di) / 2.0, (sc_pq_ans_base + sc_ans_di_base) / 2.0
+            logging.info("\tAfter regulate:")
+            logging.info(f"\tsc {j}, average score: {sc_avg}, pq ans score: {sc_pq_ans}, ans di score: {sc_ans_di}")
+            logging.info(f"\tsc_base {j}, average score: {sc_avg_base}, pq ans score {sc_pq_ans_base}, ans di score: {sc_ans_di_base}")
             for k in range(3):
                 bleu_score_k = bleu_score(d[j], d[k])
                 # bleu_score_1 = bleu_score(d[j], d[1])

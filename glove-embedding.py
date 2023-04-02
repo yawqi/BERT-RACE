@@ -15,7 +15,7 @@ train_dir = os.path.join(data_dir, 'train')
 dev_dir = os.path.join(data_dir, 'dev')
 test_dir = os.path.join(data_dir, 'test')
 
-new_dir = "./NEW-RACE200"
+new_dir = "./NEW-RACE200-train"
 new_dev_dir = os.path.join(new_dir, 'dev')
 new_train_dir = os.path.join(new_dir, 'train')
 new_test_dir = os.path.join(new_dir, 'test')
@@ -118,7 +118,7 @@ def find_top_k_similarities(vectors, target_vector, k):
     return [(vectors[i], similarities[i]) for i in top_k_indices], top_k_indices
 
 def main():
-    articles, questions, answers, dis = read_race_examples(['./RACE200'])
+    articles, questions, answers, dis = read_race_examples(['./RACE200-train'])
     v_articles = [vectorize(v) for v in articles]
     v_qas = []
 
@@ -151,6 +151,8 @@ def main():
             data['PQ'] = pq
             data['A'] = answer
             data['D'] = D
+            if not os.path.exists(new_dir):
+                os.makedirs(new_dir)
             with open(os.path.join(new_dir, filename), 'w') as f:
                 json.dump(data, f) 
         # PQs.append(PQ)

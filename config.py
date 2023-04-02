@@ -10,8 +10,8 @@ def set_args():
     parser.add_argument('--train_data', default='./TASK-3-DATA/train', type=str, help='训练数据集')
     parser.add_argument('--test_data', default='./TASK-3-DATA/test', type=str, help='测试数据集')
 
-    parser.add_argument('--pretrained_model_path', default='./output-2-bert-base-uncased/task-2-bert-base-uncased-2023-03-26_07-21-33', type=str, help='预训练模型的路径')
-    parser.add_argument('--output_dir', default='./output-3-(2->3)', type=str, help='模型输出')
+    parser.add_argument('--pretrained_model_path', default='bert-base-uncased', type=str, help='预训练模型的路径')
+    parser.add_argument('--output_dir', default='./output-3-bert-base-uncased-last-three-cls', type=str, help='模型输出')
     parser.add_argument('--num_train_epochs', default=3, type=int, help='训练几轮')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
     parser.add_argument('--val_batch_size', default=32, type=int, help='验证批次大小')
