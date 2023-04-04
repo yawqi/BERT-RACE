@@ -43,21 +43,22 @@ model_name = sys.argv[1] if len(sys.argv) > 1 else 'bert-base-uncased'
 train_batch_size = 32
 num_epochs = 3
 
-task_2_data_dir = './TASK-2-DATA'
+task_2_data_dir = './TASK-2-DATA-NEW'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_2_model_save_path = 'output-2-(3->1->2)/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
+task_2_model_save_path = 'output-2-new-mean-(1->2)/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
 num_labels = 2
-device_name = "cuda:1"
+device_name = "cuda:0"
 train_samples = read_data_from_path(os.path.join(task_2_data_dir, 'train'), 2)
 dev_samples = read_data_from_path(os.path.join(task_2_data_dir, 'dev'), 2)
 froze_params = False
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
-for param in word_embedding_model.parameters():
-    param.requires_grad = not froze_params
+if froze_params:
+    for param in word_embedding_model.parameters():
+        param.requires_grad = False
 # Apply mean pooling to get one fixed sized sentence vector
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
                                pooling_mode_mean_tokens=True,

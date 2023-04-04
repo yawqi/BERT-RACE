@@ -171,7 +171,7 @@ if __name__ == '__main__':
     # 加载数据集
     train_sentence, train_label = load_data(args.train_data, max_label=3)
     last_three = True
-    encoder_type = 'cls'
+    encoder_type = 'first-last-avg'
     train_dataset = CustomDataset(sentence=train_sentence, label=train_label, tokenizer=tokenizer)
     train_dataloader = DataLoader(dataset=train_dataset, shuffle=False, batch_size=args.train_batch_size,
                                   collate_fn=collate_fn, num_workers=1)

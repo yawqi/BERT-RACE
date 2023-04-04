@@ -44,6 +44,11 @@ class Model(nn.Module):
             final_encoding = torch.avg_pool1d(sequence_output.transpose(1, 2), kernel_size=seq_length).squeeze(-1)
             return final_encoding
 
+        if encoder_type == 'last-max':
+            sequence_output = output.last_hidden_state 
+            final_encoding = torch.max(sequence_output, dim=1)[0]
+            return final_encoding
+
         if encoder_type == "cls":
             sequence_output = output.last_hidden_state
             cls = sequence_output[:, 0]  # [b,d]

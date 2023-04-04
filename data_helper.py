@@ -66,6 +66,7 @@ def load_test_data(path, max_label = None):
                 labels.append(label)
     return sentences1, sentences2, labels
 
+
 # def load_test_data(path):
 #     sent1, sent2, label = [], [], []
 #     with open(path, 'r', encoding='utf8') as f:

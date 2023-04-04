@@ -56,7 +56,7 @@ def get_embeddings(model, text, device, max_length=512):
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
-                    filename = "calc-cos-2-all-test.log",)
+                    filename = "calc-cos-2-all-2.log",)
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
@@ -78,8 +78,8 @@ if __name__ == '__main__':
     model.to(device)
     model_base.to(device)
 
-    max2_path = './TASK-3-DATA/test/C2'
-    min2_path = './TASK-3-DATA/test/C3'
+    max2_path = './TASK-3-DATA/train/C2'
+    min2_path = './TASK-3-DATA/train/C3'
     s1_c1, s2_c1 = read_data_from_path(max2_path)
     s1_c2, s2_c2 = read_data_from_path(min2_path)
     PQs, As, Ds = [],[],[]
@@ -105,7 +105,7 @@ if __name__ == '__main__':
             sims_base_max_max = cos2
         sims_max_list.append(cos1)
         sims_max_base_list.append(cos2)
-        logging.info(f"Cos1: {cos1}, Cos2: {cos2}, sims_max: {sims_max}, sims_base_max: {sims_base_max}")
+        # logging.info(f"Cos1: {cos1}, Cos2: {cos2}, sims_max: {sims_max}, sims_base_max: {sims_base_max}")
 
     sims_max_avg = sims_max / float(len(s1_c1))
     sims_base_max_avg = sims_base_max / float(len(s1_c1))
@@ -131,7 +131,7 @@ if __name__ == '__main__':
             sims_base_min_min = cos2
         sims_min_list.append(cos1)
         sims_min_base_list.append(cos2)
-        logging.info(f"Cos1: {cos1}, Cos2: {cos2}, sims_min: {sims_min}, sims_base_min: {sims_base_min}")
+        # logging.info(f"Cos1: {cos1}, Cos2: {cos2}, sims_min: {sims_min}, sims_base_min: {sims_base_min}")
 
     sims_min_avg = sims_min / float(len(s1_c2))
     sims_base_min_avg = sims_base_min / float(len(s1_c2))

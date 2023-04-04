@@ -46,24 +46,24 @@ def get_embeddings(model, text, device):
     with torch.no_grad():
         outputs = model(**input_tokens)
         embeddings = outputs.last_hidden_state
-    # # 计算整个句子的嵌入，即各个token嵌入的平均值
-    # sentence_embedding = torch.mean(embeddings, dim=1)
-    # return sentence_embedding
+    # 计算整个句子的嵌入，即各个token嵌入的平均值
+    sentence_embedding = torch.mean(embeddings, dim=1)
+    return sentence_embedding
     # # 获取[CLS]标记的向量作为句子的全局表示
     # cls_embedding = embeddings[:, 0, :]
     # return cls_embedding
     # 获取每个词嵌入的最大值组成的向量作为句子的全局表示
-    max_embeddings, _ = torch.max(embeddings, dim=1)
-    return max_embeddings
+    # max_embeddings, _ = torch.max(embeddings, dim=1)
+    # return max_embeddings
 
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
-                    filename = "exp-task-1-2-3-mean-test.log",)
+                    filename = "exp-task-1-2-3-mean-all-test.log",)
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
-    parser.add_argument('--test_data', default='./NEW-RACE200', type=str, help='测试数据集')
+    parser.add_argument('--test_data', default='./NEW-RACE-TEST', type=str, help='测试数据集')
     parser.add_argument('--pretrained_model_path', default='output-3-(1->2->3)/2023-03-25-05-21-35-original-c5', type=str, help='预训练模型的路径')
     parser.add_argument('--output_dir', default='./exp-result', type=str, help='模型输出')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
@@ -109,15 +109,16 @@ if __name__ == '__main__':
     device = torch.device(args.device)
     model.to(device)
     model_base.to(device)
-    max1 = 0.8831976062590684
-    min1 = 0.6872149770374236
-    max1_base = 0.7196728859138961
-    min1_base = 0.6931317631658842
-    
-    max2 = 0.7601640452904506
-    min2 = 0.2911913025747514
-    max2_base = 0.570139534964524
-    min2_base = 0.5321969872166371
+    max1 = 0.989
+    min1 = 0.273
+
+    max1_base = 0.908
+    min1_base = 0.525
+
+    max2 = 0.846
+    min2 = -0.106
+    max2_base = 0.762
+    min2_base = 0.251
 
     PQs, As, Ds = [],[],[]
     for i in range(10):
