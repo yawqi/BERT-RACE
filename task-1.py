@@ -48,7 +48,7 @@ num_epochs = 3
 
 task_1_data_dir = './RACE-SR-NEW'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_1_model_save_path = 'output-1-last-three-mean/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
+task_1_model_save_path = 'output-1-new-(2->3->1)-last-three-mean/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_1_model_save_path = 'output-1/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time

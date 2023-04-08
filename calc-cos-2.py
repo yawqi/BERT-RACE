@@ -60,8 +60,8 @@ logging.basicConfig(format='%(asctime)s - %(message)s',
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
-    parser.add_argument('--pretrained_model_path', default='output-3-(1->2->3)/2023-03-25-05-21-35-original-c5', type=str, help='预训练模型的路径')
-    parser.add_argument('--device', default='cpu', type=str, help='device name "cuda:#"')
+    parser.add_argument('--pretrained_model_path', default='output-1-C4-new-last-three-mean-(2->3->1)/task-1-.-output-3-new-(2->3)-last-three-mean-2023-04-04-14-00-43--2023-04-07_00-56-27', type=str, help='预训练模型的路径')
+    parser.add_argument('--device', default='cuda:1', type=str, help='device name "cuda:#"')
     return parser.parse_args()
 
 if __name__ == '__main__':

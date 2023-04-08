@@ -27,7 +27,7 @@ class Model(nn.Module):
         '''
         output = self.bert(input_ids, attention_mask, output_hidden_states=True)
 
-        if encoder_type == 'fist-last-avg':
+        if encoder_type == 'first-last-avg':
             # 第一层和最后一层的隐层取出  然后经过平均池化
             first = output.hidden_states[1]   # hidden_states列表有13个hidden_state，第一个其实是embeddings，第二个元素才是第一层的hidden_state
             last = output.hidden_states[-1]

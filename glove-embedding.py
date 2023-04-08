@@ -15,10 +15,10 @@ train_dir = os.path.join(data_dir, 'train')
 dev_dir = os.path.join(data_dir, 'dev')
 test_dir = os.path.join(data_dir, 'test')
 
-new_dir = "./NEW-RACE-EXP"
-new_dev_dir = os.path.join(new_dir, 'dev')
-new_train_dir = os.path.join(new_dir, 'train')
-new_test_dir = os.path.join(new_dir, 'test')
+new_dir = "./NEW-RACE-K2"
+new_dev_dir = new_dir + '-DEV'
+new_train_dir = new_dir + '-TRAIN'
+new_test_dir = new_dir + '-TEST'
 
 def tokenize(text):
     tokens = nlp(text)
@@ -118,7 +118,9 @@ def find_top_k_similarities(vectors, target_vector, k):
     return [(vectors[i], similarities[i]) for i in top_k_indices], top_k_indices
 
 def main():
-    articles, questions, answers, dis = read_race_examples(['./RACE/test/high', './RACE/test/middle'])
+    articles, questions, answers, dis = read_race_examples(['./RACE/train/high', './RACE/train/middle'])
+    k = 2
+    outdir = new_train_dir
     v_articles = [vectorize(v) for v in articles]
     v_qas = []
 
@@ -137,7 +139,7 @@ def main():
         for qid, qa in enumerate(qas):
             pq = ""
             answer = answers[pid][qid]
-            top_k, top_k_idx = find_top_k_similarities(v_articles[pid], qa, 3)
+            top_k, top_k_idx = find_top_k_similarities(v_articles[pid], qa, k)
             for i in top_k_idx:
                 pq += articles[pid][i] + " "
             pq += questions[pid][qid]
@@ -151,9 +153,9 @@ def main():
             data['PQ'] = pq
             data['A'] = answer
             data['D'] = D
-            if not os.path.exists(new_dir):
-                os.makedirs(new_dir)
-            with open(os.path.join(new_dir, filename), 'w') as f:
+            if not os.path.exists(outdir):
+                os.makedirs(outdir)
+            with open(os.path.join(outdir, filename), 'w') as f:
                 json.dump(data, f) 
         # PQs.append(PQ)
     # print(PQs)

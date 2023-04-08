@@ -50,7 +50,7 @@ num_epochs = 3
 
 task_1_data_dir = './RACE-SR-c4'
 curr_time = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-task_1_model_save_path = 'output-1-C4/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
+task_1_model_save_path = 'output-1-C4-new-last-three-mean-(2->3->1)/task-1-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_2_model_save_path = 'output-2/task-2-'+model_name.replace("/", "-")+'-'+ curr_time
 # task_3_model_save_path = 'output-3/task-3-'+model_name.replace("/", "-")+'-'+ curr_time
 
@@ -61,6 +61,18 @@ dev_samples = read_data_from_path(os.path.join(task_1_data_dir, 'dev'), max_labe
 
 # Use Huggingface/transformers model (like BERT, RoBERTa, XLNet, XLM-R) for mapping tokens to embeddings
 word_embedding_model = models.Transformer(model_name)
+froze_params = False
+last_three = True
+
+if froze_params:
+    for param in word_embedding_model.parameters():
+        param.requires_grad = False
+if last_three:
+    for param in word_embedding_model.parameters():
+        param.requires_grad = False
+    for param in word_embedding_model.auto_model.encoder.layer[-3:].parameters():
+        param.requires_grad = True
+
 # Apply mean pooling to get one fixed sized sentence vector
 pooling_model = models.Pooling(word_embedding_model.get_word_embedding_dimension(),
                                pooling_mode_mean_tokens=True,

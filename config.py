@@ -11,7 +11,7 @@ def set_args():
     parser.add_argument('--test_data', default='./TASK-3-DATA/test', type=str, help='测试数据集')
 
     parser.add_argument('--pretrained_model_path', default='output-2-new-bert-base-uncased/task-2-output-1-bert-base-uncased-task-1-bert-base-uncased-2023-03-23_15-02-08-2023-04-02_13-25-51', type=str, help='预训练模型的路径')
-    parser.add_argument('--output_dir', default='./output-3-last-three-mean-new-task-2', type=str, help='模型输出')
+    parser.add_argument('--output_dir', default='./output-3-new-(2->3)-last-three-mean', type=str, help='模型输出')
     parser.add_argument('--num_train_epochs', default=3, type=int, help='训练几轮')
     parser.add_argument('--train_batch_size', default=32, type=int, help='训练批次大小')
     parser.add_argument('--val_batch_size', default=32, type=int, help='验证批次大小')

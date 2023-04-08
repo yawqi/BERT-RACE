@@ -52,11 +52,11 @@ def get_embeddings(model, text, device, max_length=512):
 logging.basicConfig(format='%(asctime)s - %(message)s',
                     datefmt='%Y-%m-%d %H:%M:%S',
                     level=logging.INFO,
-                    filename = "calc-cos-1-all-2.log",)
+                    filename = "calc-cos-1-test-true.log",)
 
 def set_args():
     parser = argparse.ArgumentParser('--CoSENT进行相似性判断')
-    parser.add_argument('--pretrained_model_path', default='output-3-(1->2->3)/2023-03-25-05-21-35-original-c5', type=str, help='预训练模型的路径')
+    parser.add_argument('--pretrained_model_path', default='output-1-C4-new-last-three-mean-(2->3->1)/task-1-.-output-3-new-(2->3)-last-three-mean-2023-04-04-14-00-43--2023-04-07_00-56-27', type=str, help='预训练模型的路径')
     parser.add_argument('--device', default='cuda:0', type=str, help='device name "cuda:#"')
     return parser.parse_args()
 
@@ -80,8 +80,8 @@ if __name__ == '__main__':
     model.to(device)
     model_base.to(device)
 
-    max1_path = './TASK-2-DATA-NEW/train/C1'
-    min1_path = './TASK-2-DATA-NEW/train/C2'
+    max1_path = './TASK-2-DATA-NEW/train/C2'
+    min1_path = './TASK-2-DATA-NEW/train/C1'
     s1_c1, s2_c1 = read_data_from_path(max1_path)
     s1_c2, s2_c2 = read_data_from_path(min1_path)
     PQs, As, Ds = [],[],[]
